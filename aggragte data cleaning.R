@@ -26,7 +26,7 @@ gov_party <- vparty %>%
          v2xpa_popul, v2paseatshare)
 
 
-left_join()  
+gov_data <- left_join(data_start, gov_party, by = c("year", "country_id")) %>%  
   arrange(country_id, year) %>%
   mutate(tenure_id = cumsum(v2paid != dplyr::lag(v2paid, default = first(v2paid))) + 1) %>%
   group_by(tenure_id) %>%
@@ -38,7 +38,8 @@ left_join()
             meanpop = mean(v2xpa_popul, na_rm = T),
             fss = first(v2paseatshare, na_rm = T),
             meanss = mean(v2paseatshare, na_rm = T),
-            term_num = n())
+            term_num = n(),
+            reg)
 
 left_join
 
