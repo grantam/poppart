@@ -97,7 +97,27 @@ cses_demeaned <- demean(cses_clean, select = c("sys_pop", "ipop"), group = "coun
 cses_clean <- cbind(cses_clean, cses_demeaned)
 
 cses_test <- cses_clean %>%
-  filter(turnout_main <=1, gender <= 3, age <= 120, edu <= 4)
+  filter(turnout_main <=1, gender <= 3, age <= 120, edu <= 4) %>%
+  mutate(represent = ifelse(who <= 9000000, 1, 0))
+
+
+m1 <- lme4::glmer(represent ~ ipop_within + ipop_between + age + as.factor(gender) + as.factor(race) + as.factor(employ) + (1|country_id), data = cses_test, family = binomial(link = "logit"), co)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 cses_test <- left_join(cses_test, party_A, by = c("year", "IMD5103_A"))
 cses_test <- left_join(cses_test, party_B, by = c("year", "IMD5103_B"))
