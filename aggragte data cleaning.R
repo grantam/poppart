@@ -40,14 +40,19 @@ gov_data <- left_join(gov_party, data_start, by = c("year", "country_id")) %>%
   group_by(country_id, tenure_id) %>%
   mutate(pop0 = first(v2xpa_popul, na_rm = T),
          ss0 = first(v2paseatshare, na_rm = T),
-         term = row_number())
+         term = row_number(),
+         poly_first = first(v2x_polyarchy, na_rm = T)) %>%
+  ungroup() %>%
+  group_by(tenure_id, country_id) %>%
+  mutate(poly_max = max(v2x_polyarchy, na.rm = t),
+         pop_avg = mean(v2xpa_popul, na_rm = T))
+  
 
 gov_data <- cbind(gov_data, 
                   datawizard::demean(gov_data,
                                      select = c("v2x_polyarchy", "dist_mag", "term", "exe_ele", "leg_ele"), 
                                      group = "country_id")) %>%
   filter(v2x_polyarchy >= .42)
-
 
 data_start <- vdem %>%
   select(country_name,
@@ -71,12 +76,13 @@ system_party <- vparty %>%
 
 system_data <- left_join(system_party, data_start, by = c("year", "country_id")) %>%  
   arrange(country_id, year)
+  
 
 system_data <- cbind(system_data, 
                   datawizard::demean(system_data,
                                      select = c( "dist_mag", "exe_ele", "leg_ele", "system_pop", "system_pop_w"), 
-                                     group = "country_id")) %>%
-  filter(v2x_polyarchy >= .42) %>%
+                                     by = "country_id")) %>%
+filter(v2x_polyarchy >= .42) %>%
   mutate(sys_sqr = system_pop*system_pop)
   
 
@@ -87,4 +93,13 @@ summary(m1)
 m2 <- lmer(vapturn ~ system_pop_within + system_pop_between + exe_ele + leg_ele + as.factor(compvote) + (1 | country_id), data = system_data)
 
 summary(m2)
+
+
+stan_m1 <- stan_glmer(vapturn ~ pop0*v2x_polyarchy_within + v2x_polyarchy_between + exe_ele  + leg_ele + ss0 + term_within + term_between + as.factor(compvote) + (1 | country_id/tenure_id), data = gov_data, refresh = 0, cores = 8)
+
+summary(stan_m1)
+
+stan_m2 <- stan_glmer(vapturn ~ system_pop_within + system_pop_between + exe_ele + leg_ele + as.factor(compvote) + (1 | country_id), data = system_data, refresh = 0, cores = 8)
+
+summary(stan_m2)
 
