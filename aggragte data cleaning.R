@@ -57,7 +57,13 @@ gov_data_sep <- cbind(gov_data_sep,
   filter(v2x_polyarchy >= .42)
 
 
-m1 <- lmer(vapturn ~ pop0*v2x_polyarchy_within + v2x_polyarchy_between + exe_ele + leg_ele + ss0 + term_within + term_between + as.factor(compvote) + (1 | country_id/tenure_id), data = gov_data_sep)
+m0 <- stan_lmer(vapturn ~ pop0*v2x_polyarchy + (1 | country_id/tenure_id), data = gov_data_sep, cores = 8 , refresh = 0)
+
+summary(m0)
+
+
+
+m1 <- stan_lmer(vapturn ~ pop0*v2x_polyarchy_within + v2x_polyarchy_between + exe_ele + leg_ele + ss0 + term_within + term_between + as.factor(compvote) + (1 | country_id/tenure_id), data = gov_data_sep, cores = 8 , refresh = 0)
 
 summary(m1)
 
@@ -119,7 +125,7 @@ filter(v2x_polyarchy >= .42) %>%
   mutate(sys_sqr = system_pop*system_pop)
   
 
-m1 <- lmer(vapturn ~ pop0*v2x_polyarchy_within + v2x_polyarchy_between + exe_ele  + leg_ele + ss0 + term_within + term_between + as.factor(compvote) + (1 | country_id/tenure_id), data = gov_data_sep)
+m1 <- stan_lmer(vapturn ~ pop0*v2x_polyarchy_within + v2x_polyarchy_between + exe_ele  + leg_ele + ss0 + term_within + term_between + as.factor(compvote) + (1 | country_id/tenure_id), data = gov_data_sep , cores = 8 , refresh = 0)
 
 summary(m1)
 
