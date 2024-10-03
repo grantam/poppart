@@ -45,8 +45,9 @@ gov_data_sep <- left_join(gov_party, data_start, by = c("year", "country_id")) %
          poly_first = first(v2x_polyarchy, na_rm = T)) %>%
   ungroup() %>%
   group_by(tenure_id, country_id) %>%
-  mutate(poly_max = max(v2x_polyarchy, na.rm = t),
-         pop_avg = mean(v2xpa_popul, na_rm = T))
+  mutate(poly_max = max(v2x_polyarchy, na.rm = T),
+         pop_avg = mean(v2xpa_popul, na_rm = T),
+         id = paste(country_id, tenure_id, sep = "_"))
   
 
 gov_data_sep <- cbind(gov_data_sep, 
@@ -56,17 +57,9 @@ gov_data_sep <- cbind(gov_data_sep,
   filter(v2x_polyarchy >= .42)
 
 
-data_start <- vdem %>%
-  select(country_name,
-         country_id, year,
-         regturn = v2eltrnout,
-         vapturn = v2elvaptrn,
-         compvote = v2elcomvot,
-         leg_ele = v2eltype_0,
-         exe_ele = v2eltype_6,
-         dist_mag = v2elloeldm,
-         v2x_polyarchy)
+m1 <- lmer(vapturn ~ pop0*v2x_polyarchy_within + v2x_polyarchy_between + exe_ele + leg_ele + ss0 + term_within + term_between + as.factor(compvote) + (1 | country_id/tenure_id), data = gov_data_sep)
 
+summary(m1)
 
 
 gov_data_con <- left_join(gov_party, data_start, by = c("year", "country_id")) %>%  
@@ -82,7 +75,8 @@ gov_data_con <- left_join(gov_party, data_start, by = c("year", "country_id")) %
          poly_first = first(v2x_polyarchy, na_rm = T),
          mean_vap = mean(vapturn, na_rm = T),
          comp_first = first(compvote, na_rm = T),
-         poly_last = last(lag_poly, na_rm = T))
+         poly_last = last(lag_poly, na_rm = T),
+         mean_pop)
 
 gov_data_con <- gov_data_con %>%
   group_by(tenure_id, country_id) %>%
@@ -103,16 +97,6 @@ gov_data_con <- cbind(gov_data_con,
                                          group = "country_id")) %>%
   filter(poly_first >= .42)
 
-data_start <- vdem %>%
-  select(country_name,
-         country_id, year,
-         regturn = v2eltrnout,
-         vapturn = v2elvaptrn,
-         compvote = v2elcomvot,
-         leg_ele = v2eltype_0,
-         exe_ele = v2eltype_6,
-         dist_mag = v2elloeldm,
-         v2x_polyarchy)
 
 system_party <- vparty %>%
   mutate(wpop = v2xpa_popul*v2paseatshare) %>%
@@ -130,25 +114,21 @@ system_data <- left_join(system_party, data_start, by = c("year", "country_id"))
 system_data <- cbind(system_data, 
                   datawizard::demean(system_data,
                                      select = c( "dist_mag", "exe_ele", "leg_ele", "system_pop", "system_pop_w"), 
-                                     by = "country_id")) %>%
+                                    group = "country_id")) %>%
 filter(v2x_polyarchy >= .42) %>%
   mutate(sys_sqr = system_pop*system_pop)
   
 
-m1 <- lmer(vapturn ~ pop0*v2x_polyarchy_within + v2x_polyarchy_between + exe_ele  + leg_ele + ss0 + term_within + term_between + as.factor(compvote) + (1 | country_id/tenure_id), data = gov_data)
+m1 <- lmer(vapturn ~ pop0*v2x_polyarchy_within + v2x_polyarchy_between + exe_ele  + leg_ele + ss0 + term_within + term_between + as.factor(compvote) + (1 | country_id/tenure_id), data = gov_data_sep)
 
 summary(m1)
 
-m2 <- lmer(vapturn ~ system_pop_within + system_pop_between + exe_ele + leg_ele + as.factor(compvote) + (1 | country_id), data = system_data)
+m2 <- lmer(mean_vap ~ *poly_chg_within + poly_chg_between + term_within + term_between + as.factor(comp_first) + (1 | country_id), data = gov_data_con)
 
 summary(m2)
 
 
-stan_m1 <- stan_glmer(mean_vap ~ pop0 + poly_chg_within + poly_chg_between + term_within + term_between + as.factor(comp_first) + (1 | country_id), data = gov_data_con, refresh = 0, cores = 8)
 
-summary(stan_m1)
-
-stan_m2 <- stan_glmer(vapturn ~ system_pop_within + system_pop_between + exe_ele + leg_ele + as.factor(compvote) + (1 | country_id), data = system_data, refresh = 0, cores = 8)
 
 summary(stan_m2)
 
