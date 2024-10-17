@@ -24,7 +24,8 @@ data_start <- vdem %>%
          leg_ele = v2eltype_0,
          exe_ele = v2eltype_6,
          dist_mag = v2elloeldm,
-         v2x_polyarchy)
+         v2x_polyarchy,
+         population = e_pop)
 
 gov_party <- vparty %>%
   filter(v2pagovsup == 0) %>%
@@ -52,12 +53,17 @@ gov_data_sep <- left_join(gov_party, data_start, by = c("year", "country_id")) %
 
 gov_data_sep <- cbind(gov_data_sep, 
                   datawizard::demean(gov_data_sep,
-                                     select = c("v2x_polyarchy", "dist_mag", "term", "exe_ele", "leg_ele"), 
+                                     select = c("v2x_polyarchy", "dist_mag", "term", "exe_ele", "leg_ele", "population"), 
                                      group = "country_id")) %>%
   filter(v2x_polyarchy >= .42)
 
 
-m1 <- lmer(vapturn ~ pop0*v2x_polyarchy_within + v2x_polyarchy_between + exe_ele + leg_ele + ss0 + term_within + term_between + as.factor(compvote) + (1 | country_id/tenure_id), data = gov_data_sep)
+m0 <- stan_lmer(vapturn ~ pop0*v2x_polyarchy_within + v2x_polyarchy_between + (1 | country_id/tenure_id), data = gov_data_sep, cores = 8 , refresh = 0)
+
+summary(m0)
+
+
+m1 <- stan_lmer(vapturn ~ pop0*v2x_polyarchy_within + v2x_polyarchy_between + exe_ele + leg_ele + ss0 + term_within + term_between + as.factor(compvote) + population_within + population_between + (1 | country_id/tenure_id), data = gov_data_sep, cores = 8 , refresh = 0)
 
 summary(m1)
 
@@ -119,7 +125,7 @@ filter(v2x_polyarchy >= .42) %>%
   mutate(sys_sqr = system_pop*system_pop)
   
 
-m1 <- lmer(vapturn ~ pop0*v2x_polyarchy_within + v2x_polyarchy_between + exe_ele  + leg_ele + ss0 + term_within + term_between + as.factor(compvote) + (1 | country_id/tenure_id), data = gov_data_sep)
+m1 <- stan_lmer(vapturn ~ pop0*v2x_polyarchy_within + v2x_polyarchy_between + exe_ele  + leg_ele + ss0 + term_within + term_between + as.factor(compvote) + (1 | country_id/tenure_id), data = gov_data_sep , cores = 8 , refresh = 0)
 
 summary(m1)
 
