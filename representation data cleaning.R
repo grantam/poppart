@@ -109,6 +109,26 @@ cses_test <- cses_clean %>%
   mutate(how_rep = as.factor(how_rep),
          represent = as.factor(represent))
 
+
+cses_viz <- cses_test %>%
+  group_by(country, year) %>%
+  mutate(
+    represent = as.numeric(represent),     # Convert to integer
+    how_rep = as.numeric(how_rep)          # Convert to numeric
+  ) %>%
+  summarize(
+    total_rep = mean(represent, na.rm = TRUE),
+    total_high = mean(ifelse(how_rep == 3, 1, 0), na.rm = TRUE),
+    total_mid = mean(ifelse(how_rep == 2, 1, 0), na.rm = TRUE),
+    total_low = mean(ifelse(how_rep == 1, 1, 0), na.rm = TRUE),
+    total_zero = mean(ifelse(how_rep == 0, 1, 0), na.rm = TRUE),
+    ipop = mean(ipop, na.rm = TRUE),  # Adding mean for `ipop`
+    .groups = "drop"  # Removes grouping structure in final output
+  )
+
+
+
+
 m1 <- clmm(how_rep ~ ipop_within*v2pariglef_within + ipop_between + v2pariglef_between + age + as.factor(gender) + v2elloeldm_within + v2elloeldm_between + as.factor(v2elparlel) + as.factor(edu) + (1|country_id), data = cses_test, weights = sampweight, cores = 8)
 
 summary(m1)
