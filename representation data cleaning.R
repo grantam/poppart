@@ -15,7 +15,7 @@ library(stargazer)
 library(ordinal)
 
 
-populists <- read_dta("C:/Users/ochoc/Dropbox/Populism Book/03 Data/00 World Politics/Now the People Rule/Important Do Files/separate_data_set.dta") %>%
+populists <- read_dta("C:/Users/mitchellg/Dropbox/Populism Book/03 Data/00 World Politics/Now the People Rule/Important Do Files/separate_data_set.dta") %>%
   mutate(term_character = as.character(term),
          leader_id = paste(leader, term_character))
 
@@ -25,7 +25,7 @@ vparty2 <- vparty %>%
          newpop =(vparty_medianharm-1)/4)
 
 party <- vparty2 %>%
-  group_by(country_name, country_id, year, country_text_id, v2paenname) %>%
+  group_by(country_name, country_id, year, country_text_id) %>%
   mutate(wpop = newpop*v2paseatshare) %>%
   summarize(votesum = sum(v2paseatshare, na.rm = T),
             sys_pop = sum(wpop, na.rm = T)/votesum)
@@ -51,7 +51,11 @@ incumbent <- vparty2 %>%
   filter(v2pagovsup == 0) %>%
   mutate(ipop = lag(newpop))
 
-party <- left_join(party, incumbent, by = c("year", "country_id"))
+party3 <- left_join(party, incumbent, by = c("year", "country_id"))
+
+party4 <- left_join(party3, opp, by = c("year", "country_id"))
+
+party_final <- left_join(party4, gov, by = c("year", "country_id"))
 
 party_A <- vparty2 %>%
   select(year, pop_A = newpop, IMD5103_A = pf_party_id, vote_A = v2pavote) %>%
@@ -92,7 +96,7 @@ party_I <- vparty2 %>%
 inst <- vdem %>%
   select(country_id, year, v2elloeldm, v2x_polyarchy, v2elparlel)
 
-cses <- read.csv("C:/Users/ochoc/Downloads/cses_imd.csv")
+cses <- read.csv("~/R projects/poppart/cses_imd.csv")
 
 cses_clean <- cses %>%
   select(eleid = IMD1003, country_id = IMD1006_VDEM, country = IMD1006_NAM, iso = IMD1006_UNALPHA3, eletype = IMD1009, resid = IMD1008_RES, sampweight = IMD1010_1, demweight = IMD1010_2, polweight = IMD1010_3, r1date = IMD1011_1, r2date = IMD1012_1, age = IMD2001_1, age_cat = IMD2001_2, gender = IMD2002, edu = IMD2003, income = IMD2006, region = IMD2008, race = IMD2010, employ = IMD2014, turnout_main = IMD3001, turnout_r1p = IMD3001_PR_1, turnout_r2p = IMD3001_PR_2, turnout_lh = IMD3001_LH, turnout_uh = IMD3001_UH, turnout_switch = IMD3001_TS, choice_pr1 = IMD3002_PR_2, choice_pr2 = IMD3002_LH_PL, choice_swtich = IMD3002_VS_1, choice_ideo = IMD3002_IF_CSES, close = IMD3005_1, closer = IMD3005_2, who = IMD3005_3, how_close = IMD3005_4, lr = IMD3006, IMD3008_A:IMD3009_I, demsat = IMD3010, partyrep = IMD3016_1, bestrep = IMD3016_2, IMD5000_A:IMD5000_I, IMD5001_A:IMD5001_I, rvt = IMD5006_1, vapt = IMD5006_2, compvote = IMD5007, IMD5052_1:IMD5056_3, IMD5058_1, numofparties  = IMD5058_2, IMD5103_A:IMD5103_I) %>%
@@ -112,23 +116,17 @@ cses_clean <- cses %>%
          how_close = ifelse(represent == 0, 0, how_close),
          how_rep = ifelse(close == 0 & closer == 0, 0, how_close),
          how_rep = ifelse(how_rep > 3, NA, how_rep))
-
-sums <- cses_clean %>%
-  group_by(year, country) %>%
-  summarise(mean = mean(represent))
   
 
-cses_clean <- left_join(cses_clean, party, by = c("country_id", "year")) %>%
+cses_clean1 <- left_join(cses_clean, party_final, by = c("country_id", "year")) %>%
   mutate(ctid = iso)
 
-cses_clean <- left_join(cses_clean, inst, by = c("year", "country_id"))
+cses_clean2 <- left_join(cses_clean1, inst, by = c("year", "country_id"))
 
-cses_demeaned <- demean(cses_clean, select = c("sys_pop", "ipop", "v2elloeldm", "v2pariglef"), group = "country_id")
+cses_demeaned <- demean(cses_clean2, select = c("sys_pop", "ipop", "v2elloeldm", "v2pariglef"), by =  "country_id")
 
-cses_clean <- cbind(cses_clean, cses_demeaned)
-
-cses_test <- cses_clean %>%
-  filter(turnout_main <=1, gender <= 3, age <= 120) %>%
+cses_test <- cses_demeaned %>%
+  filter(gender <= 3, age <= 120) %>%
   mutate(how_rep = as.factor(how_rep),
          represent = as.factor(represent))
 
@@ -152,8 +150,8 @@ cses_viz <- cses_test %>%
 
 
 
-m1 <- clmm(how_rep ~ ipop_within*v2pariglef_within + ipop_between + v2pariglef_between + age + as.factor(gender) + v2elloeldm_within + v2elloeldm_between + as.factor(v2elparlel) + as.factor(edu) + (1|country_id), data = cses_test)
+m1 <- clmm(how_rep ~ ipop_within + ipop_between + v2pariglef_within + v2pariglef_between + age + as.factor(gender) + v2elloeldm_within + v2elloeldm_between  + as.factor(v2elparlel) + as.factor(edu) + (1|country_id), data = cses_test)
 
 summary(m1)
 
-View(cses_test)
+m1View(cses_test)
