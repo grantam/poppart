@@ -97,7 +97,7 @@ party_I <- vparty2 %>%
 inst <- vdem %>%
   select(country_id, year, v2elloeldm, v2x_polyarchy, v2elparlel)
 
-cses <- read.csv("~/R projects/poppart/cses_imd.csv")
+cses <- read.csv("C:/Users/ochoc/Downloads/cses_imd.csv")
 
 cses_clean <- cses %>%
   select(eleid = IMD1003, country_id = IMD1006_VDEM, country = IMD1006_NAM, iso = IMD1006_UNALPHA3, eletype = IMD1009, resid = IMD1008_RES, sampweight = IMD1010_1, demweight = IMD1010_2, polweight = IMD1010_3, r1date = IMD1011_1, r2date = IMD1012_1, age = IMD2001_1, age_cat = IMD2001_2, gender = IMD2002, edu = IMD2003, income = IMD2006, region = IMD2008, race = IMD2010, employ = IMD2014, turnout_main = IMD3001, turnout_r1p = IMD3001_PR_1, turnout_r2p = IMD3001_PR_2, turnout_lh = IMD3001_LH, turnout_uh = IMD3001_UH, turnout_switch = IMD3001_TS, choice_pr1 = IMD3002_PR_2, choice_pr2 = IMD3002_LH_PL, choice_swtich = IMD3002_VS_1, choice_ideo = IMD3002_IF_CSES, close = IMD3005_1, closer = IMD3005_2, who = IMD3005_3, how_close = IMD3005_4, lr = IMD3006, IMD3008_A:IMD3009_I, demsat = IMD3010, partyrep = IMD3016_1, bestrep = IMD3016_2, IMD5000_A:IMD5000_I, IMD5001_A:IMD5001_I, rvt = IMD5006_1, vapt = IMD5006_2, compvote = IMD5007, IMD5052_1:IMD5056_3, IMD5058_1, numofparties  = IMD5058_2, IMD5103_A:IMD5103_I) %>%
@@ -147,9 +147,8 @@ cses_test <- cses_demeaned %>%
          gov_pop_within_c = ((gov_pop_within - mean(gov_pop_within, na.rm = T))/(2*sd(gov_pop_within, na.rm = T))),
          sys_pop_within_c = ((sys_pop_within - mean(sys_pop_within, na.rm = T))/(2*sd(sys_pop_within, na.rm = T))),
          gov_pop_between_c = ((gov_pop_between - mean(gov_pop_between, na.rm = T))/(2*sd(gov_pop_between, na.rm = T))),
-         sys_pop_between_c = ((sys_pop_between - mean(sys_pop_between, na.rm = T))/(2*sd(sys_pop_between, na.rm = T))))
-
-
+         sys_pop_between_c = ((sys_pop_between - mean(sys_pop_between, na.rm = T))/(2*sd(sys_pop_between, na.rm = T))),
+         numofparties_c = ((numofparties - mean(numofparties, na.rm = T))/(2*sd(numofparties, na.rm = T))))
 
 
 cses_test$year_fact <- as.factor(cses_test$year_fact)
@@ -159,16 +158,78 @@ cses_test$v2elparlel <- as.factor(cses_test$v2elparlel)
 cses_test$edu <- as.factor(cses_test$edu)
 cses_test$how_rep <- as.factor(cses_test$how_rep)
 
-m1 <- clmm(how_rep ~ opp_pop_within_c +
+m1 <- clmm(how_rep ~ sys_pop_within_c +
+             sys_pop_between_c +
+             v2pariglef_within_c +
+             v2pariglef_between_c +
+             v2elloeldm_within_c +
+             v2elloeldm_between_c +
+             numofparties_c +
+             age_squ_c +
+             as.factor(gender) +
+             as.factor(v2elparlel) +
+             as.factor(edu) +
+             (1| country_id) +
+             (1 | country_id:year_fact),
+           data = cses_test)
+
+
+m2 <- clmm(how_rep ~ opp_pop_within_c +
              opp_pop_between_c +
              ipop_within_c +
              ipop_between_c +
              v2pariglef_within_c +
              v2pariglef_between_c +
-             age_squ_c +
-             as.factor(gender) +
              v2elloeldm_within_c +
              v2elloeldm_between_c +
+             numofparties_c +
+             age_squ_c +
+             as.factor(gender) +
+             as.factor(v2elparlel) +
+             as.factor(edu) +
+             (1| country_id) +
+             (1 | country_id:year_fact),
+           data = cses_test)
+
+m3 <- clmm(how_rep ~ opp_pop_within_c +
+             opp_pop_between_c +
+             v2pariglef_within_c +
+             v2pariglef_between_c +
+             v2elloeldm_within_c +
+             v2elloeldm_between_c +
+             numofparties_c +
+             age_squ_c +
+             as.factor(gender) +
+             as.factor(v2elparlel) +
+             as.factor(edu) +
+             (1| country_id) +
+             (1 | country_id:year_fact),
+           data = cses_test)
+
+m4 <- clmm(how_rep ~ ipop_within_c +
+             ipop_between_c +
+             v2pariglef_within_c +
+             v2pariglef_between_c +
+             v2elloeldm_within_c +
+             v2elloeldm_between_c +
+             numofparties_c +
+             age_squ_c +
+             as.factor(gender) +
+             as.factor(v2elparlel) +
+             as.factor(edu) +
+             (1| country_id) +
+             (1 | country_id:year_fact),
+           data = cses_test)
+
+m5 <- clmm(how_rep ~ gov_pop_within_c +
+             goc_pop_between_c +
+             v2pariglef_within_c +
+             v2pariglef_between_c +
+             v2elloeldm_within_c +
+             v2elloeldm_between_c +
+             numofparties_c +
+             age_squ_c +
+             as.factor(gender) +
              as.factor(v2elparlel) +
              as.factor(edu) +
              (1| country_id) +
@@ -176,3 +237,7 @@ m1 <- clmm(how_rep ~ opp_pop_within_c +
            data = cses_test)
 
 summary(m1)
+summary(m2)
+summary(m3)
+summary(m4)
+summary(m5)
