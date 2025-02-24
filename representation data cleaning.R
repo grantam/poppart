@@ -15,7 +15,7 @@ library(stargazer)
 library(ordinal)
 
 
-populists <- read_dta("C:/Users/mitchellg/Dropbox/Populism Book/03 Data/00 World Politics/Now the People Rule/Important Do Files/separate_data_set.dta") %>%
+populists <- read_dta("C:/Users/ochoc/Dropbox/Populism Book/03 Data/00 World Politics/Now the People Rule/Important Do Files/separate_data_set.dta") %>%
   mutate(term_character = as.character(term),
          leader_id = paste(leader, term_character))
 
@@ -42,7 +42,7 @@ gov <- vparty2 %>%
   mutate(wpop = newpop*v2paseatshare) %>%
   filter(v2pagovsup >= 2) %>%
   summarize(votesum = sum(v2paseatshare, na.rm = T),
-            opp_pop = sum(wpop, na.rm = T)/votesum)
+            gov_pop = sum(wpop, na.rm = T)/votesum)
 
 
 incumbent <- vparty2 %>%
@@ -72,6 +72,7 @@ party_C <- vparty2 %>%
 party_D <- vparty2 %>%
   select(year, pop_D = newpop, IMD5103_D = pf_party_id, vote_D = v2pavote) %>%
   mutate(vote_D = vote_D/100)
+
 
 party_E <- vparty2 %>%
   select(year, pop_E = newpop, IMD5103_E = pf_party_id, vote_E = v2pavote) %>%
@@ -116,42 +117,62 @@ cses_clean <- cses %>%
          how_close = ifelse(represent == 0, 0, how_close),
          how_rep = ifelse(close == 0 & closer == 0, 0, how_close),
          how_rep = ifelse(how_rep > 3, NA, how_rep))
-  
+
 
 cses_clean1 <- left_join(cses_clean, party_final, by = c("country_id", "year")) %>%
   mutate(ctid = iso)
 
 cses_clean2 <- left_join(cses_clean1, inst, by = c("year", "country_id"))
 
-cses_demeaned <- demean(cses_clean2, select = c("sys_pop", "ipop", "v2elloeldm", "v2pariglef"), by =  "country_id")
+cses_demeaned <- demean(cses_clean2, select = c("sys_pop", "ipop", "v2elloeldm", "v2pariglef", "gov_pop", "opp_pop"), by =  "country_id")
 
 cses_test <- cses_demeaned %>%
   filter(gender <= 3, age <= 120) %>%
   mutate(how_rep = as.factor(how_rep),
-         represent = as.factor(represent))
+         represent = as.factor(represent)) %>%
+  mutate(date= as.factor(r1date),
+         year_fact = as.factor(year)) %>%
+  filter(gender != 3) %>%
+  mutate(opp_pop_within_c = ((opp_pop_within - mean(opp_pop_within, na.rm = T))/(2*sd(opp_pop_within, na.rm = T))),
+         opp_pop_between_c = ((opp_pop_between - mean(opp_pop_between, na.rm = T))/(2*sd(opp_pop_between, na.rm = T))),
+         ipop_within_c = ((ipop_within - mean(ipop_within, na.rm = T))/(2*sd(ipop_within, na.rm = T))),
+         ipop_between_c = ((ipop_between - mean(ipop_between, na.rm = T))/(2*sd(ipop_between, na.rm = T))),
+         v2pariglef_within_c = ((v2pariglef_within - mean(v2pariglef_within, na.rm = T))/(2*sd(v2pariglef_within, na.rm = T))),
+         v2pariglef_between_c = ((v2pariglef_between - mean(v2pariglef_between, na.rm = T))/(2*sd(v2pariglef_between, na.rm = T))),
+         age_squ = age*age,
+         age_c = ((age - mean(age, na.rm = T))/(2*sd(age, na.rm = T))),
+         age_squ_c = ((age_squ - mean(age_squ, na.rm = T))/(2*sd(age_squ, na.rm = T))),
+         v2elloeldm_within_c = ((v2elloeldm_within - mean(v2elloeldm_within, na.rm = T))/(2*sd(v2elloeldm_within, na.rm = T))),
+         v2elloeldm_between_c = ((v2elloeldm_between - mean(v2elloeldm_between, na.rm = T))/(2*sd(v2elloeldm_between, na.rm = T))),
+         gov_pop_within_c = ((gov_pop_within - mean(gov_pop_within, na.rm = T))/(2*sd(gov_pop_within, na.rm = T))),
+         sys_pop_within_c = ((sys_pop_within - mean(sys_pop_within, na.rm = T))/(2*sd(sys_pop_within, na.rm = T))),
+         gov_pop_between_c = ((gov_pop_between - mean(gov_pop_between, na.rm = T))/(2*sd(gov_pop_between, na.rm = T))),
+         sys_pop_between_c = ((sys_pop_between - mean(sys_pop_between, na.rm = T))/(2*sd(sys_pop_between, na.rm = T))))
 
 
-cses_viz <- cses_test %>%
-  group_by(country, year) %>%
-  mutate(
-    represent = as.numeric(represent),     # Convert to integer
-    how_rep = as.numeric(how_rep)          # Convert to numeric
-  ) %>%
-  summarize(
-    total_rep = mean(represent, na.rm = TRUE),
-    total_high = mean(ifelse(how_rep == 3, 1, 0), na.rm = TRUE),
-    total_mid = mean(ifelse(how_rep == 2, 1, 0), na.rm = TRUE),
-    total_low = mean(ifelse(how_rep == 1, 1, 0), na.rm = TRUE),
-    total_zero = mean(ifelse(how_rep == 0, 1, 0), na.rm = TRUE),
-    ipop = mean(ipop, na.rm = TRUE),  # Adding mean for `ipop`
-    .groups = "drop"  # Removes grouping structure in final output
-  )
 
 
+cses_test$year_fact <- as.factor(cses_test$year_fact)
+cses_test$country_id <- as.factor(cses_test$country_id)
+cses_test$gender <- as.factor(cses_test$gender)
+cses_test$v2elparlel <- as.factor(cses_test$v2elparlel)
+cses_test$edu <- as.factor(cses_test$edu)
+cses_test$how_rep <- as.factor(cses_test$how_rep)
 
-
-m1 <- clmm(how_rep ~ ipop_within + ipop_between + v2pariglef_within + v2pariglef_between + age + as.factor(gender) + v2elloeldm_within + v2elloeldm_between  + as.factor(v2elparlel) + as.factor(edu) + (1|country_id), data = cses_test)
+m1 <- clmm(how_rep ~ opp_pop_within_c +
+             opp_pop_between_c +
+             ipop_within_c +
+             ipop_between_c +
+             v2pariglef_within_c +
+             v2pariglef_between_c +
+             age_squ_c +
+             as.factor(gender) +
+             v2elloeldm_within_c +
+             v2elloeldm_between_c +
+             as.factor(v2elparlel) +
+             as.factor(edu) +
+             (1| country_id) +
+             (1 | country_id:year_fact),
+           data = cses_test)
 
 summary(m1)
-
-m1View(cses_test)
