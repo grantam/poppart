@@ -259,4 +259,4 @@ cses_test$edu <- as.factor(cses_test$edu)
 cses_test$how_rep <- as.factor(cses_test$how_rep)
 
 
-save(cses_test, file = "cses_test.Rda")
+saveRDS(cses_test, file = "/cses_test.Rda")
