@@ -13,37 +13,36 @@ library(reghelper)
 library(datawizard)
 library(stargazer)
 library(ordinal)
+library(data.table)
 
-
-populists <- read_dta("C:/Users/ochoc/Dropbox/Populism Book/03 Data/00 World Politics/Now the People Rule/Important Do Files/separate_data_set.dta") %>%
-  mutate(term_character = as.character(term),
-         leader_id = paste(leader, term_character))
+# --- Original calculations on vparty ---
 
 vparty2 <- vparty %>%
-  mutate(medianosp_flip = 4-v2paopresp_osp,
-         vparty_medianharm = 3/((1/(v2paanteli_osp+1))+(1/(v2papeople_osp+1))+(1/(medianosp_flip+1))),
-         newpop =(vparty_medianharm-1)/4)
+  mutate(medianosp_flip = 4 - v2paopresp_osp,
+         vparty_medianharm = 3 / ((1 / (v2paanteli_osp + 1)) + 
+                                    (1 / (v2papeople_osp + 1)) + 
+                                    (1 / (medianosp_flip + 1))),
+         newpop = (vparty_medianharm - 1) / 4)
 
 party <- vparty2 %>%
   group_by(country_name, country_id, year, country_text_id) %>%
-  mutate(wpop = newpop*v2paseatshare) %>%
-  summarize(votesum = sum(v2paseatshare, na.rm = T),
-            sys_pop = sum(wpop, na.rm = T)/votesum)
+  mutate(wpop = newpop * v2paseatshare) %>%
+  summarize(votesum = sum(v2paseatshare, na.rm = TRUE),
+            sys_pop = sum(wpop, na.rm = TRUE) / votesum)
 
 opp <- vparty2 %>%
   group_by(country_name, country_id, year, country_text_id) %>%
-  mutate(wpop = newpop*v2paseatshare) %>%
+  mutate(wpop = newpop * v2paseatshare) %>%
   filter(v2pagovsup == 3) %>%
-  summarize(votesum = sum(v2paseatshare, na.rm = T),
-            opp_pop = sum(wpop, na.rm = T)/votesum)
+  summarize(votesum = sum(v2paseatshare, na.rm = TRUE),
+            opp_pop = sum(wpop, na.rm = TRUE) / votesum)
 
 gov <- vparty2 %>%
   group_by(country_name, country_id, year, country_text_id) %>%
-  mutate(wpop = newpop*v2paseatshare) %>%
-  filter(v2pagovsup >= 2) %>%
-  summarize(votesum = sum(v2paseatshare, na.rm = T),
-            gov_pop = sum(wpop, na.rm = T)/votesum)
-
+  mutate(wpop = newpop * v2paseatshare) %>%
+  filter(v2pagovsup <= 2) %>%
+  summarize(votesum = sum(v2paseatshare, na.rm = TRUE),
+            gov_pop = sum(wpop, na.rm = TRUE) / votesum)
 
 incumbent <- vparty2 %>%
   group_by(country_id) %>%
@@ -52,47 +51,74 @@ incumbent <- vparty2 %>%
   mutate(ipop = lag(newpop))
 
 party3 <- left_join(party, incumbent, by = c("year", "country_id"))
-
 party4 <- left_join(party3, opp, by = c("year", "country_id"))
-
 party_final <- left_join(party4, gov, by = c("year", "country_id"))
 
-party_A <- vparty2 %>%
-  select(year, pop_A = newpop, IMD5103_A = pf_party_id, vote_A = v2pavote) %>%
-  mutate(vote_A = vote_A/100)
+# --- Dataset expansion to include non-election years ---
 
-party_B <- vparty2 %>%
-  select(year, pop_B = newpop, IMD5103_B = pf_party_id, vote_B = v2pavote) %>%
-  mutate(vote_B = vote_B/100)
+n_obs <- 23600  # Highest party id times 100
+df <- data.frame(id = 1:n_obs)
 
-party_C <- vparty2 %>%
-  select(year, pop_C = newpop, IMD5103_C = pf_party_id, vote_C = v2pavote) %>%
-  mutate(vote_C = vote_C/100)
+df <- df %>%
+  mutate(group_id = id / 100,
+         country_id = ceiling(group_id)) %>%
+  arrange(country_id) %>%
+  group_by(country_id) %>%
+  mutate(year = 1924 + (row_number() - 1)) %>%
+  ungroup() %>%
+  select(-id, -group_id)
 
-party_D <- vparty2 %>%
-  select(year, pop_D = newpop, IMD5103_D = pf_party_id, vote_D = v2pavote) %>%
-  mutate(vote_D = vote_D/100)
+# Merge with party data (placeholder: use your actual data source)
+# Here we assume `newparty` is already loaded or built from `vparty`
+# For now, we simulate it by filtering vparty2 (you should replace this part)
+
+# Merge with expanded df
+df <- left_join(df, party_final, by = c("country_id", "year")) 
+
+# Fill missing values within party groups
+vars_to_fill <- c("country_name", "country_text_id", "sys_pop", "ipop", "v2pariglef", "opp_pop", "gov_pop", "v2paenname")
+
+setDT(df)
+df <- df[order(country_id, year)]
+df[, (vars_to_fill) := lapply(.SD, function(x) na.locf(x, na.rm = FALSE)), 
+   by = country_id, .SDcols = vars_to_fill] 
+
+df <- df %>% 
+  filter(is.na(country_name) == F) %>%
+  select(country_id, country_name, country_text_id, year, sys_pop, v2paenname, ipop, opp_pop, gov_pop, v2pariglef)
 
 
-party_E <- vparty2 %>%
-  select(year, pop_E = newpop, IMD5103_E = pf_party_id, vote_E = v2pavote) %>%
-  mutate(vote_E = vote_E/100)
+#### Individual Level
 
-party_F <- vparty2 %>%
-  select(year, pop_F = newpop, IMD5103_F = pf_party_id, vote_F = v2pavote) %>%
-  mutate(vote_F = vote_F/100)
+n_obs <- 2602678  # Highest party id times 100
+df_ind <- data.frame(id = 1:n_obs)
 
-party_G <- vparty2 %>%
-  select(year, pop_G = newpop, IMD5103_G = pf_party_id, vote_G = v2pavote) %>%
-  mutate(vote_G = vote_G/100)
+df_ind <- df_ind %>%
+  mutate(group_id = id / 26,
+         v2paid = ceiling(group_id)) %>%
+  arrange(v2paid) %>%
+  group_by(v2paid) %>%
+  mutate(year = 1996 + (row_number() - 1)) %>%
+  ungroup() %>%
+  select(-id, -group_id)
 
-party_H <- vparty2 %>%
-  select(year, pop_H = newpop, IMD5103_H = pf_party_id, vote_H = v2pavote) %>%
-  mutate(vote_H = vote_H/100)
+vparty3 <- vparty2 %>%
+  select(v2paid, year, newpop, country_name, country_text_id, v2paenname, pf_party_id, country_id)
 
-party_I <- vparty2 %>%
-  select(year, pop_I = newpop, IMD5103_I = pf_party_id, vote_I = v2pavote) %>%
-  mutate(vote_I = vote_I/100)
+df_ind <- left_join(df_ind, vparty3, by = c("v2paid", "year")) 
+
+# Fill missing values within party groups
+vars_to_fill <- c("country_name", "country_text_id", "newpop", "v2paenname", "pf_party_id", "country_id")
+
+setDT(df_ind)
+df_ind <- df_ind[order(v2paid, year)]
+df_ind[, (vars_to_fill) := lapply(.SD, function(x) na.locf(x, na.rm = FALSE)), 
+   by = v2paid, .SDcols = vars_to_fill] 
+
+df_ind <- df_ind %>% 
+  filter(is.na(country_name) == F) %>%
+  select(v2paenname, v2paid, country_name, country_text_id, year, newpop, pf_party_id, country_id)
+
 
 inst <- vdem %>%
   select(country_id, year, v2elloeldm, v2x_polyarchy, v2elparlel)
@@ -113,31 +139,92 @@ cses_clean <- cses %>%
          r2date = IMD1012_1,
          age = IMD2001_1,
          age_cat = IMD2001_2,
-         gender = IMD2002, edu = IMD2003, income = IMD2006, region = IMD2008, race = IMD2010, employ = IMD2014, turnout_main = IMD3001, turnout_r1p = IMD3001_PR_1, turnout_r2p = IMD3001_PR_2, turnout_lh = IMD3001_LH, turnout_uh = IMD3001_UH, turnout_switch = IMD3001_TS, choice_pr1 = IMD3002_PR_2, choice_pr2 = IMD3002_LH_PL, choice_swtich = IMD3002_VS_1, choice_ideo = IMD3002_IF_CSES, close = IMD3005_1, closer = IMD3005_2, who = IMD3005_3, how_close = IMD3005_4, lr = IMD3006, IMD3008_A:IMD3009_I, demsat = IMD3010, partyrep = IMD3016_1, bestrep = IMD3016_2, IMD5000_A:IMD5000_I, IMD5001_A:IMD5001_I, rvt = IMD5006_1, vapt = IMD5006_2, compvote = IMD5007, IMD5052_1:IMD5056_3, IMD5058_1, numofparties  = IMD5058_2, IMD5103_A:IMD5103_I) %>%
+         gender = IMD2002,
+         edu = IMD2003,
+         income = IMD2006,
+         region = IMD2008,
+         race = IMD2010,
+         employ = IMD2014,
+         turnout_main = IMD3001,
+         turnout_r1p = IMD3001_PR_1,
+         turnout_r2p = IMD3001_PR_2,
+         turnout_lh = IMD3001_LH,
+         turnout_uh = IMD3001_UH,
+         choice_lh2 = IMD3002_LH_PL,
+         choice_swtich = IMD3002_VS_1,
+         choice_ideo = IMD3002_IF_CSES,
+         close = IMD3005_1,
+         closer = IMD3005_2,
+         who = IMD3005_3,
+         how_close = IMD3005_4,
+         lr = IMD3006,
+         IMD3008_A:IMD3009_I,
+         demsat = IMD3010,
+         partyrep = IMD3016_1,
+         bestrep = IMD3016_2,
+         IMD5000_A:IMD5000_I,
+         IMD5001_A:IMD5001_I,
+         rvt = IMD5006_1,
+         vapt = IMD5006_2,
+         compvote = IMD5007,
+         IMD5052_1:IMD5056_3,
+         IMD5058_1,
+         numofparties = IMD5058_2,
+         IMD5103_A:IMD5103_I) %>%
   filter(close <= 1) %>%
   mutate(date = as.Date(r1date, format = "%Y-%m-%d"),
-         year = year(date)) %>%
-  mutate(IMD3008_A = ifelse(IMD3008_A < 10, IMD3008_A, NA),
-         IMD3008_B = ifelse(IMD3008_B < 10, IMD3008_B, NA),
-         IMD3008_C = ifelse(IMD3008_C < 10, IMD3008_C, NA),
-         IMD3008_D = ifelse(IMD3008_D < 10, IMD3008_D, NA),
-         IMD3008_E = ifelse(IMD3008_E < 10, IMD3008_E, NA),
-         IMD3008_F = ifelse(IMD3008_F < 10, IMD3008_F, NA),
-         IMD3008_G = ifelse(IMD3008_G < 10, IMD3008_G, NA),
-         IMD3008_H = ifelse(IMD3008_H < 10, IMD3008_H, NA),
-         IMD3008_I = ifelse(IMD3008_I < 10, IMD3008_I, NA),
+         year = year(date), 
          represent = ifelse(close == 0 & closer == 0, 0, 1),
          how_close = ifelse(represent == 0, 0, how_close),
          how_rep = ifelse(close == 0 & closer == 0, 0, how_close),
          how_rep = ifelse(how_rep > 3, NA, how_rep))
 
 
-cses_clean1 <- left_join(cses_clean, party_final, by = c("country_id", "year")) %>%
+cses_clean1 <- left_join(cses_clean, df, by = c("country_id", "year")) %>%
   mutate(ctid = iso)
 
 cses_clean2 <- left_join(cses_clean1, inst, by = c("year", "country_id"))
 
-cses_demeaned <- demean(cses_clean2, select = c("sys_pop", "ipop", "v2elloeldm", "v2pariglef", "gov_pop", "opp_pop"), by =  "country_id")
+cses_clean3 <- cses_clean2 %>%
+  mutate(
+    closest_party = case_when(
+      who == IMD5000_A ~ IMD5103_A,
+      who == IMD5000_B ~ IMD5103_B,
+      who == IMD5000_C ~ IMD5103_C,
+      who == IMD5000_D ~ IMD5103_D,
+      who == IMD5000_E ~ IMD5103_E,
+      who == IMD5000_F ~ IMD5103_F,
+      who == IMD5000_G ~ IMD5103_G,
+      who == IMD5000_H ~ IMD5103_H,
+      who == IMD5000_I ~ IMD5103_I,
+      TRUE ~ NA_integer_
+    ),
+    voted_party = case_when(
+      choice_lh2 == IMD5000_A ~ IMD5103_A,
+      choice_lh2 == IMD5000_B ~ IMD5103_B,
+      choice_lh2 == IMD5000_C ~ IMD5103_C,
+      choice_lh2 == IMD5000_D ~ IMD5103_D,
+      choice_lh2 == IMD5000_E ~ IMD5103_E,
+      choice_lh2 == IMD5000_F ~ IMD5103_F,
+      choice_lh2 == IMD5000_G ~ IMD5103_G,
+      choice_lh2 == IMD5000_H ~ IMD5103_H,
+      choice_lh2 == IMD5000_I ~ IMD5103_I,
+      TRUE ~ NA_integer_
+    ))
+
+df_ind1 <- df_ind %>%
+  rename(closest_party = pf_party_id) %>%
+  select(year, closest_party, country_id, newpop_closest = newpop, v2paenname_closest = v2paenname)
+
+df_ind2 <- df_ind %>%
+  rename(voted_party = pf_party_id) %>%
+  select(year, voted_party, country_id, newpop_voted = newpop, v2paenname_voted = v2paenname)
+
+cses_clean4 <- left_join(cses_clean3, df_ind1, by = c("year", "closest_party", "country_id"))
+
+cses_clean5 <- left_join(cses_clean4, df_ind2, by = c("year", "voted_party", "country_id"))
+
+cses_demeaned <- demean(cses_clean5, select = c("sys_pop", "ipop", "v2elloeldm", "v2pariglef", "gov_pop", "opp_pop"), by =  "country_id")
 
 cses_test <- cses_demeaned %>%
   filter(gender <= 3, age <= 120) %>%
@@ -171,86 +258,5 @@ cses_test$v2elparlel <- as.factor(cses_test$v2elparlel)
 cses_test$edu <- as.factor(cses_test$edu)
 cses_test$how_rep <- as.factor(cses_test$how_rep)
 
-m1 <- clmm(how_rep ~ sys_pop_within_c +
-             sys_pop_between_c +
-             v2pariglef_within_c +
-             v2pariglef_between_c +
-             v2elloeldm_within_c +
-             v2elloeldm_between_c +
-             numofparties_c +
-             age_squ_c +
-             as.factor(gender) +
-             as.factor(v2elparlel) +
-             as.factor(edu) +
-             (1| country_id) +
-             (1 | country_id:year_fact),
-           data = cses_test)
 
-
-m2 <- clmm(how_rep ~ opp_pop_within_c +
-             opp_pop_between_c +
-             ipop_within_c +
-             ipop_between_c +
-             v2pariglef_within_c +
-             v2pariglef_between_c +
-             v2elloeldm_within_c +
-             v2elloeldm_between_c +
-             numofparties_c +
-             age_squ_c +
-             as.factor(gender) +
-             as.factor(v2elparlel) +
-             as.factor(edu) +
-             (1| country_id) +
-             (1 | country_id:year_fact),
-           data = cses_test)
-
-m3 <- clmm(how_rep ~ opp_pop_within_c +
-             opp_pop_between_c +
-             v2pariglef_within_c +
-             v2pariglef_between_c +
-             v2elloeldm_within_c +
-             v2elloeldm_between_c +
-             numofparties_c +
-             age_squ_c +
-             as.factor(gender) +
-             as.factor(v2elparlel) +
-             as.factor(edu) +
-             (1| country_id) +
-             (1 | country_id:year_fact),
-           data = cses_test)
-
-m4 <- clmm(how_rep ~ ipop_within_c +
-             ipop_between_c +
-             v2pariglef_within_c +
-             v2pariglef_between_c +
-             v2elloeldm_within_c +
-             v2elloeldm_between_c +
-             numofparties_c +
-             age_squ_c +
-             as.factor(gender) +
-             as.factor(v2elparlel) +
-             as.factor(edu) +
-             (1| country_id) +
-             (1 | country_id:year_fact),
-           data = cses_test)
-
-m5 <- clmm(how_rep ~ gov_pop_within_c +
-             goc_pop_between_c +
-             v2pariglef_within_c +
-             v2pariglef_between_c +
-             v2elloeldm_within_c +
-             v2elloeldm_between_c +
-             numofparties_c +
-             age_squ_c +
-             as.factor(gender) +
-             as.factor(v2elparlel) +
-             as.factor(edu) +
-             (1| country_id) +
-             (1 | country_id:year_fact),
-           data = cses_test)
-
-summary(m1)
-summary(m2)
-summary(m3)
-summary(m4)
-summary(m5)
+save(cses_test, file = "cses_test.Rda")
