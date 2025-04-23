@@ -224,7 +224,11 @@ cses_clean4 <- left_join(cses_clean3, df_ind1, by = c("year", "closest_party", "
 
 cses_clean5 <- left_join(cses_clean4, df_ind2, by = c("year", "voted_party", "country_id"))
 
-cses_demeaned <- demean(cses_clean5, select = c("sys_pop", "ipop", "v2elloeldm", "v2pariglef", "gov_pop", "opp_pop"), by =  "country_id")
+cses_demeaned <- demean(cses_clean5, select = c("sys_pop", "ipop", "v2elloeldm", "v2pariglef", "gov_pop", "opp_pop"), by =  "country_id") %>%
+  mutate(age_squ = age*age,
+         countryear = as.factor(paste0(country_text_id, year)))
+  
+cses_demeaned <- demean(cses_demeaned, select = c("age", "age_squ"), by = c("countryear"))
 
 cses_test <- cses_demeaned %>%
   filter(gender <= 3, age <= 120) %>%
@@ -239,9 +243,10 @@ cses_test <- cses_demeaned %>%
          ipop_between_c = ((ipop_between - mean(ipop_between, na.rm = T))/(2*sd(ipop_between, na.rm = T))),
          v2pariglef_within_c = ((v2pariglef_within - mean(v2pariglef_within, na.rm = T))/(2*sd(v2pariglef_within, na.rm = T))),
          v2pariglef_between_c = ((v2pariglef_between - mean(v2pariglef_between, na.rm = T))/(2*sd(v2pariglef_between, na.rm = T))),
-         age_squ = age*age,
-         age_c = ((age - mean(age, na.rm = T))/(2*sd(age, na.rm = T))),
-         age_squ_c = ((age_squ - mean(age_squ, na.rm = T))/(2*sd(age_squ, na.rm = T))),
+         age_within_c = ((age_within - mean(age_within, na.rm = T))/(2*sd(age_within, na.rm = T))),
+         age_betweem_c = ((age_between - mean(age_between, na.rm = T))/(2*sd(age_between, na.rm = T))),
+         age_squ_within_c = ((age_squ_within - mean(age_squ_within, na.rm = T))/(2*sd(age_squ_within, na.rm = T))),
+         age_squ_between_c = ((age_squ_between - mean(age_squ_between, na.rm = T))/(2*sd(age_squ_between, na.rm = T))),
          v2elloeldm_within_c = ((v2elloeldm_within - mean(v2elloeldm_within, na.rm = T))/(2*sd(v2elloeldm_within, na.rm = T))),
          v2elloeldm_between_c = ((v2elloeldm_between - mean(v2elloeldm_between, na.rm = T))/(2*sd(v2elloeldm_between, na.rm = T))),
          gov_pop_within_c = ((gov_pop_within - mean(gov_pop_within, na.rm = T))/(2*sd(gov_pop_within, na.rm = T))),
