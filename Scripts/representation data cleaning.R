@@ -228,7 +228,7 @@ cses_demeaned <- demean(cses_clean5, select = c("sys_pop", "ipop", "v2elloeldm",
   mutate(age_squ = age*age,
          countryear = as.factor(paste0(country_text_id, year)))
   
-cses_demeaned <- demean(cses_demeaned, select = c("age", "age_squ"), by = c("countryear"))
+cses_demeaned <- demean(cses_demeaned, select = c("age", "age_squ", "newpop_voted", "newpop_closest"), by = c("countryear"))
 
 cses_test <- cses_demeaned %>%
   filter(gender <= 3, age <= 120) %>%
@@ -253,7 +253,11 @@ cses_test <- cses_demeaned %>%
          sys_pop_within_c = ((sys_pop_within - mean(sys_pop_within, na.rm = T))/(2*sd(sys_pop_within, na.rm = T))),
          gov_pop_between_c = ((gov_pop_between - mean(gov_pop_between, na.rm = T))/(2*sd(gov_pop_between, na.rm = T))),
          sys_pop_between_c = ((sys_pop_between - mean(sys_pop_between, na.rm = T))/(2*sd(sys_pop_between, na.rm = T))),
-         numofparties_c = ((numofparties - mean(numofparties, na.rm = T))/(2*sd(numofparties, na.rm = T))))
+         numofparties_c = ((numofparties - mean(numofparties, na.rm = T))/(2*sd(numofparties, na.rm = T))),
+         newpop_closest_within_c = ((newpop_closest_within - mean(newpop_closest_within, na.rm = T))/(2*sd(newpop_closest_within, na.rm = T))),
+         newpop_closest_between_c = ((newpop_closest_between - mean(newpop_closest_between, na.rm = T))/(2*sd(newpop_closest_between, na.rm = T))),
+         newpop_voted_within_c = ((newpop_voted_within - mean(newpop_voted_within, na.rm = T))/(2*sd(newpop_voted_within, na.rm = T))),
+         newpop_voted_between_c = ((newpop_voted_between - mean(newpop_voted_between, na.rm = T))/(2*sd(newpop_voted_between, na.rm = T))))
 
 
 cses_test$year_fact <- as.factor(cses_test$year_fact)
