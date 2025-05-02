@@ -121,7 +121,10 @@ df_ind <- df_ind %>%
 
 
 inst <- vdem %>%
-  select(country_id, year, v2elloeldm, v2x_polyarchy, v2elparlel)
+  select(country_id, year, v2elloeldm, v2x_polyarchy, v2elparlel, ccodecow = COWcode)
+
+qog <- read.csv("C:/Users/ochoc/Downloads/qog_bas_ts_jan25.csv") %>%
+  select(year, ccodecow, numofparties = gol_enep)
 
 cses <- read.csv("C:/Users/ochoc/Downloads/cses_imd.csv")
 
@@ -169,33 +172,42 @@ cses_clean <- cses %>%
          compvote = IMD5007,
          IMD5052_1:IMD5056_3,
          IMD5058_1,
-         numofparties = IMD5058_2,
-         IMD5103_A:IMD5103_I) %>%
-  filter(close <= 1) %>%
-  mutate(date = as.Date(r1date, format = "%Y-%m-%d"),
+         IMD5103_A:IMD5103_I,
+         unemploy_t0 = IMD5054_2,
+         gdpg_t0 = IMD5052_2,
+         gdppc_t0 = IMD5053_2,
+         ses = IMD2016
+         )%>%
+  mutate(close = ifelse(close > 1, NA, close), 
+         date = as.Date(r1date, format = "%Y-%m-%d"),
          year = year(date), 
          represent = ifelse(close == 0 & closer == 0, 0, 1),
          how_close = ifelse(represent == 0, 0, how_close),
          how_rep = ifelse(close == 0 & closer == 0, 0, how_close),
-         how_rep = ifelse(how_rep > 3, NA, how_rep))
+         how_rep = ifelse(how_rep > 3, NA, how_rep),
+         partyrep = as.factor(ifelse(partyrep > 1, NA, partyrep)),
+         unemploy_t0 = ifelse(unemploy_t0 > 100, NA, unemploy_t0),
+         ses = as.factor(ifelse(ses > 5, NA, ses)),
+         gdppc_t0 = ifelse(gdppc_t0 > 899999, NA, gdppc_t0),
+         gdppc_t0 = ifelse(gdpg_t0 > 30, NA, gdppc_t0),
+         age = ifelse(age > 120, NA, age),
+         edu = ifelse(edu > 6, NA, edu),
+         gender = ifelse(gender > 2, NA, gender))
 
 
 cses_clean1 <- left_join(cses_clean, df, by = c("country_id", "year")) %>%
   mutate(ctid = iso)
 
-cses_clean2 <- left_join(cses_clean1, inst, by = c("year", "country_id"))
+cses_clean1a <- left_join(cses_clean1, inst, by = c("year", "country_id"))
+
+cses_clean2 <- left_join(cses_clean1a, qog, by = c("year", "ccodecow"))
 
 cses_clean3 <- cses_clean2 %>%
   mutate(
     closest_party = case_when(
       who == IMD5000_A ~ IMD5103_A,
       who == IMD5000_B ~ IMD5103_B,
-      who == IMD5000_C ~ IMD5103_C,
-      who == IMD5000_D ~ IMD5103_D,
-      who == IMD5000_E ~ IMD5103_E,
-      who == IMD5000_F ~ IMD5103_F,
-      who == IMD5000_G ~ IMD5103_G,
-      who == IMD5000_H ~ IMD5103_H,
+      who == IMD5000_C ~ IMD5103_H,
       who == IMD5000_I ~ IMD5103_I,
       TRUE ~ NA_integer_
     ),
@@ -209,8 +221,8 @@ cses_clean3 <- cses_clean2 %>%
       choice_lh2 == IMD5000_G ~ IMD5103_G,
       choice_lh2 == IMD5000_H ~ IMD5103_H,
       choice_lh2 == IMD5000_I ~ IMD5103_I,
-      TRUE ~ NA_integer_
-    ))
+      TRUE ~ NA_integer_))
+
 
 df_ind1 <- df_ind %>%
   rename(closest_party = pf_party_id) %>%
@@ -224,14 +236,13 @@ cses_clean4 <- left_join(cses_clean3, df_ind1, by = c("year", "closest_party", "
 
 cses_clean5 <- left_join(cses_clean4, df_ind2, by = c("year", "voted_party", "country_id"))
 
-cses_demeaned <- demean(cses_clean5, select = c("sys_pop", "ipop", "v2elloeldm", "v2pariglef", "gov_pop", "opp_pop"), by =  "country_id") %>%
+cses_demeaned <- demean(cses_clean5, select = c("sys_pop", "ipop", "v2elloeldm", "v2pariglef", "gov_pop", "opp_pop", "unemploy_t0", "gdpg_t0", "gdppc_t0"), by =  "country_id") %>%
   mutate(age_squ = age*age,
          countryear = as.factor(paste0(country_text_id, year)))
   
-cses_demeaned <- demean(cses_demeaned, select = c("age", "age_squ", "newpop_voted", "newpop_closest"), by = c("countryear"))
+cses_demeaned <- demean(cses_demeaned, select = c("age", "age_squ", "newpop_voted", "newpop_closest", "ses"), by = c("countryear"))
 
 cses_test <- cses_demeaned %>%
-  filter(gender <= 3, age <= 120) %>%
   mutate(how_rep = as.factor(how_rep),
          represent = as.factor(represent)) %>%
   mutate(date= as.factor(r1date),
@@ -244,7 +255,7 @@ cses_test <- cses_demeaned %>%
          v2pariglef_within_c = ((v2pariglef_within - mean(v2pariglef_within, na.rm = T))/(2*sd(v2pariglef_within, na.rm = T))),
          v2pariglef_between_c = ((v2pariglef_between - mean(v2pariglef_between, na.rm = T))/(2*sd(v2pariglef_between, na.rm = T))),
          age_within_c = ((age_within - mean(age_within, na.rm = T))/(2*sd(age_within, na.rm = T))),
-         age_betweem_c = ((age_between - mean(age_between, na.rm = T))/(2*sd(age_between, na.rm = T))),
+         age_between_c = ((age_between - mean(age_between, na.rm = T))/(2*sd(age_between, na.rm = T))),
          age_squ_within_c = ((age_squ_within - mean(age_squ_within, na.rm = T))/(2*sd(age_squ_within, na.rm = T))),
          age_squ_between_c = ((age_squ_between - mean(age_squ_between, na.rm = T))/(2*sd(age_squ_between, na.rm = T))),
          v2elloeldm_within_c = ((v2elloeldm_within - mean(v2elloeldm_within, na.rm = T))/(2*sd(v2elloeldm_within, na.rm = T))),
@@ -257,7 +268,8 @@ cses_test <- cses_demeaned %>%
          newpop_closest_within_c = ((newpop_closest_within - mean(newpop_closest_within, na.rm = T))/(2*sd(newpop_closest_within, na.rm = T))),
          newpop_closest_between_c = ((newpop_closest_between - mean(newpop_closest_between, na.rm = T))/(2*sd(newpop_closest_between, na.rm = T))),
          newpop_voted_within_c = ((newpop_voted_within - mean(newpop_voted_within, na.rm = T))/(2*sd(newpop_voted_within, na.rm = T))),
-         newpop_voted_between_c = ((newpop_voted_between - mean(newpop_voted_between, na.rm = T))/(2*sd(newpop_voted_between, na.rm = T))))
+         newpop_voted_between_c = ((newpop_voted_between - mean(newpop_voted_between, na.rm = T))/(2*sd(newpop_voted_between, na.rm = T))),
+         age_squ_c = ((age_squ - mean(age_squ, na.rm = T))/(2*sd(age_squ, na.rm = T))))
 
 
 cses_test$year_fact <- as.factor(cses_test$year_fact)
