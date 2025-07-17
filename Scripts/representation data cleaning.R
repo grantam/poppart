@@ -14,6 +14,7 @@ library(datawizard)
 library(stargazer)
 library(ordinal)
 library(data.table)
+library(countrycode)
 
 # --- Original calculations on vparty ---
 
@@ -54,9 +55,21 @@ party3 <- left_join(party, incumbent, by = c("year", "country_id"))
 party4 <- left_join(party3, opp, by = c("year", "country_id"))
 party_final <- left_join(party4, gov, by = c("year", "country_id"))
 
+party_final <- party_final %>%
+  arrange(country_id, year) %>% 
+  group_by(country_id) %>%
+  mutate(
+    lag_ipop = dplyr::lag(ipop),
+    lag_opp_pop =dplyr:: lag(opp_pop),
+    lag_sys_pop = dplyr::lag(sys_pop),
+    lag_gov_pop = dplyr::lag(gov_pop),
+    lag_year = dplyr::lag(year)
+  ) %>%
+  ungroup()
+
 # --- Dataset expansion to include non-election years ---
 
-n_obs <- 23600  # Highest party id times 100
+n_obs <- 23600
 df <- data.frame(id = 1:n_obs)
 
 df <- df %>%
@@ -68,15 +81,11 @@ df <- df %>%
   ungroup() %>%
   select(-id, -group_id)
 
-# Merge with party data (placeholder: use your actual data source)
-# Here we assume `newparty` is already loaded or built from `vparty`
-# For now, we simulate it by filtering vparty2 (you should replace this part)
-
 # Merge with expanded df
 df <- left_join(df, party_final, by = c("country_id", "year")) 
 
 # Fill missing values within party groups
-vars_to_fill <- c("country_name", "country_text_id", "sys_pop", "ipop", "v2pariglef", "opp_pop", "gov_pop", "v2paenname")
+vars_to_fill <- c("country_name", "country_text_id", "sys_pop", "ipop", "v2pariglef", "opp_pop", "gov_pop", "v2paenname", "lag_sys_pop", "lag_ipop", "lag_gov_pop", "lag_opp_pop")
 
 setDT(df)
 df <- df[order(country_id, year)]
@@ -85,7 +94,7 @@ df[, (vars_to_fill) := lapply(.SD, function(x) na.locf(x, na.rm = FALSE)),
 
 df <- df %>% 
   filter(is.na(country_name) == F) %>%
-  select(country_id, country_name, country_text_id, year, sys_pop, v2paenname, ipop, opp_pop, gov_pop, v2pariglef)
+  select(country_id, country_name, country_text_id, year, sys_pop, v2paenname, ipop, opp_pop, gov_pop, v2pariglef, lag_sys_pop, lag_ipop, lag_gov_pop, lag_opp_pop)
 
 
 #### Individual Level
@@ -119,9 +128,23 @@ df_ind <- df_ind %>%
   filter(is.na(country_name) == F) %>%
   select(v2paenname, v2paid, country_name, country_text_id, year, newpop, pf_party_id, country_id)
 
-
 inst <- vdem %>%
-  select(country_id, year, v2elloeldm, v2x_polyarchy, v2elparlel, ccodecow = COWcode)
+  select(country_id, year, v2elloeldm, v2x_polyarchy, v2elparlel, ccodecow = COWcode, v2ex_elechog, v2exhoshog, v2ex_elechos) %>%
+  mutate(hog_direct = ifelse(v2exhoshog == 1, v2ex_elechos, v2ex_elechog)) %>%
+  group_by(country_id) %>%
+  arrange(year, .by_group = TRUE) %>%
+  mutate(
+    reset = v2x_polyarchy < 0.42,
+    reset_group = cumsum(lag(reset, default = TRUE)),
+    party_sys_age = sequence(rle(reset_group)$lengths) - 1
+  ) %>%
+  ungroup()
+
+incomeineq <- read_csv("incomeineq.csv") %>%
+  select(year, country, gini = gini_disp) %>%
+  mutate(ccodecow = countrycode(country, origin = "country.name", destination = "cown"))
+
+inst <- left_join(inst, incomeineq, by = c("year", "ccodecow"))
 
 qog <- read.csv("C:/Users/ochoc/Downloads/qog_bas_ts_jan25.csv") %>%
   select(year, ccodecow, numofparties = gol_enep)
@@ -192,7 +215,12 @@ cses_clean <- cses %>%
          gdppc_t0 = ifelse(gdpg_t0 > 30, NA, gdppc_t0),
          age = ifelse(age > 120, NA, age),
          edu = ifelse(edu > 6, NA, edu),
-         gender = ifelse(gender > 2, NA, gender))
+         gender = ifelse(gender > 2, NA, gender),
+         lr = ifelse(lr > 10, NA, lr),
+         lr_missing = as.factor(ifelse(is.na(lr) == T, 1, 0)),
+         lr = lr - 5,
+         lr = ifelse(lr_missing == 1, 0, lr),
+         col = abs(lr))
 
 
 cses_clean1 <- left_join(cses_clean, df, by = c("country_id", "year")) %>%
@@ -236,40 +264,50 @@ cses_clean4 <- left_join(cses_clean3, df_ind1, by = c("year", "closest_party", "
 
 cses_clean5 <- left_join(cses_clean4, df_ind2, by = c("year", "voted_party", "country_id"))
 
-cses_demeaned <- demean(cses_clean5, select = c("sys_pop", "ipop", "v2elloeldm", "v2pariglef", "gov_pop", "opp_pop", "unemploy_t0", "gdpg_t0", "gdppc_t0"), by =  "country_id") %>%
+cses_demeaned <- demean(cses_clean5, select = c("sys_pop", "ipop", "v2pariglef", "gov_pop", "opp_pop", "unemploy_t0", "gdpg_t0", "gdppc_t0", "lag_sys_pop", "lag_ipop", "lag_gov_pop", "lag_opp_pop", "gini", "numofparties"), by =  "country_id") %>%
   mutate(age_squ = age*age,
          countryear = as.factor(paste0(country_text_id, year)))
   
-cses_demeaned <- demean(cses_demeaned, select = c("age", "age_squ", "newpop_voted", "newpop_closest", "ses"), by = c("countryear"))
+cses_demeaned1 <- demean(cses_demeaned, select = c("age", "age_squ", "newpop_voted", "newpop_closest", "ses", "lr"), by = c("countryear"))
 
-cses_test <- cses_demeaned %>%
-  mutate(how_rep = as.factor(how_rep),
-         represent = as.factor(represent)) %>%
-  mutate(date= as.factor(r1date),
-         year_fact = as.factor(year)) %>%
+cses_test <- cses_demeaned1 %>%
+  mutate(
+    how_rep = as.factor(how_rep),
+    represent = as.factor(represent),
+    date = as.factor(r1date),
+    year_fact = as.factor(year)
+  ) %>%
   filter(gender != 3) %>%
-  mutate(opp_pop_within_c = ((opp_pop_within - mean(opp_pop_within, na.rm = T))/(2*sd(opp_pop_within, na.rm = T))),
-         opp_pop_between_c = ((opp_pop_between - mean(opp_pop_between, na.rm = T))/(2*sd(opp_pop_between, na.rm = T))),
-         ipop_within_c = ((ipop_within - mean(ipop_within, na.rm = T))/(2*sd(ipop_within, na.rm = T))),
-         ipop_between_c = ((ipop_between - mean(ipop_between, na.rm = T))/(2*sd(ipop_between, na.rm = T))),
-         v2pariglef_within_c = ((v2pariglef_within - mean(v2pariglef_within, na.rm = T))/(2*sd(v2pariglef_within, na.rm = T))),
-         v2pariglef_between_c = ((v2pariglef_between - mean(v2pariglef_between, na.rm = T))/(2*sd(v2pariglef_between, na.rm = T))),
-         age_within_c = ((age_within - mean(age_within, na.rm = T))/(2*sd(age_within, na.rm = T))),
-         age_between_c = ((age_between - mean(age_between, na.rm = T))/(2*sd(age_between, na.rm = T))),
-         age_squ_within_c = ((age_squ_within - mean(age_squ_within, na.rm = T))/(2*sd(age_squ_within, na.rm = T))),
-         age_squ_between_c = ((age_squ_between - mean(age_squ_between, na.rm = T))/(2*sd(age_squ_between, na.rm = T))),
-         v2elloeldm_within_c = ((v2elloeldm_within - mean(v2elloeldm_within, na.rm = T))/(2*sd(v2elloeldm_within, na.rm = T))),
-         v2elloeldm_between_c = ((v2elloeldm_between - mean(v2elloeldm_between, na.rm = T))/(2*sd(v2elloeldm_between, na.rm = T))),
-         gov_pop_within_c = ((gov_pop_within - mean(gov_pop_within, na.rm = T))/(2*sd(gov_pop_within, na.rm = T))),
-         sys_pop_within_c = ((sys_pop_within - mean(sys_pop_within, na.rm = T))/(2*sd(sys_pop_within, na.rm = T))),
-         gov_pop_between_c = ((gov_pop_between - mean(gov_pop_between, na.rm = T))/(2*sd(gov_pop_between, na.rm = T))),
-         sys_pop_between_c = ((sys_pop_between - mean(sys_pop_between, na.rm = T))/(2*sd(sys_pop_between, na.rm = T))),
-         numofparties_c = ((numofparties - mean(numofparties, na.rm = T))/(2*sd(numofparties, na.rm = T))),
-         newpop_closest_within_c = ((newpop_closest_within - mean(newpop_closest_within, na.rm = T))/(2*sd(newpop_closest_within, na.rm = T))),
-         newpop_closest_between_c = ((newpop_closest_between - mean(newpop_closest_between, na.rm = T))/(2*sd(newpop_closest_between, na.rm = T))),
-         newpop_voted_within_c = ((newpop_voted_within - mean(newpop_voted_within, na.rm = T))/(2*sd(newpop_voted_within, na.rm = T))),
-         newpop_voted_between_c = ((newpop_voted_between - mean(newpop_voted_between, na.rm = T))/(2*sd(newpop_voted_between, na.rm = T))),
-         age_squ_c = ((age_squ - mean(age_squ, na.rm = T))/(2*sd(age_squ, na.rm = T))))
+  mutate(across(
+    c(opp_pop_within, opp_pop_between,
+      ipop_within, ipop_between,
+      v2pariglef_within, v2pariglef_between,
+      age_within, age_between,
+      age_squ_within, age_squ_between,
+      v2elloeldm,
+      gov_pop_within, gov_pop_between,
+      sys_pop_within, sys_pop_between,
+      numofparties,
+      newpop_closest_within, newpop_closest_between,
+      newpop_voted_within, newpop_voted_between,
+      age_squ,
+      lr_within, lr_between,
+      lag_sys_pop_within, lag_ipop_within, lag_gov_pop_within, lag_opp_pop_within, lag_sys_pop_between, lag_ipop_between, lag_gov_pop_between, lag_opp_pop_between,
+      party_sys_age,
+      numofparties_within,
+      numofparties_between,
+      gini_between,
+      gini_within,
+      unemploy_t0_between,
+      unemploy_t0_within,
+      lr,
+      radical
+    ),
+    ~ (. - mean(., na.rm = TRUE)) / (2 * sd(., na.rm = TRUE)),
+    .names = "{.col}_c"
+  )) %>%
+  mutate()
+
 
 
 cses_test$year_fact <- as.factor(cses_test$year_fact)
