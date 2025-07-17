@@ -31,10 +31,11 @@ model_vars <- c("how_rep", "sys_pop_within_c", "sys_pop_between_c",
                 "gov_pop_between_c",
                 "ipop_within_c",
                 "ipop_between_c",
-                "v2elloeldm_within_c", "v2elloeldm_between_c",
+                "v2elloeldm_c",
                 "unemploy_t0_within", "unemploy_t0_between",
                 "age_squ_c", "numofparties_c",
-                "gender", "v2elparlel", "edu")
+                "gender", "v2elparlel", "edu",
+                "party_sys_age", "lr")
 
 #### Filter dataset to relevant variables
 
@@ -63,10 +64,11 @@ model_vars <- c("partyrep", "sys_pop_within_c", "sys_pop_between_c",
                 "gov_pop_between_c",
                 "ipop_within_c",
                 "ipop_between_c",
-                "v2elloeldm_within_c", "v2elloeldm_between_c",
+                "v2elloeldm_c",
                 "unemploy_t0_within", "unemploy_t0_between",
                 "age_squ_c", "numofparties_c",
-                "gender", "v2elparlel", "edu")
+                "gender", "v2elparlel", "edu",
+                "party_sys_age", "lr")
 
 #### Filter dataset to relevant variables
 
@@ -86,20 +88,21 @@ summary(summary_data)
 
 #### List of continuous fixed-effect variables
 
-fixed_vars <- c("sys_pop_within_c",
-                "sys_pop_between_c",
-                "opp_pop_within_c",
-                "opp_pop_between_c",
-                "gov_pop_within_c",
-                "gov_pop_between_c",
-                "ipop_within_c",
-                "ipop_between_c",
-                "v2elloeldm_within_c",
-                "v2elloeldm_between_c",
-                "unemploy_t0_within",
-                "unemploy_t0_between",
-                "numofparties_c",
-                "age_squ_c")
+fixed_vars <- c("lag_opp_pop_within_c" ,
+                  "lag_opp_pop_between_c" ,
+                  "lag_ipop_within_c" ,
+                  "lag_ipop_between_c" ,
+                  "v2elloeldm_c" ,
+                  "party_sys_age_c" ,
+                  "unemploy_t0_within_c" ,
+                  "unemploy_t0_between_c" ,
+                  "gini_within_c" ,
+                  "gini_between_c",
+                  "numofparties_within_c" ,
+                  "numofparties_between_c" ,
+                  "age_squ_c" ,
+                  "lr_c",
+                  "radical_c")
 
 #### Omit missing data
 
@@ -153,6 +156,7 @@ m1 <- clmm(how_rep ~
              v2elloeldm_between_c +
              unemploy_t0_within +
              unemploy_t0_between +
+             party_sys_age +
              age_squ_c +
              numofparties_c +
              as.factor(gender) +
@@ -169,12 +173,13 @@ summary(m1)
 m1a <- glmer(partyrep ~ 
              sys_pop_within_c +
              sys_pop_between_c +
-             v2elloeldm_within_c +
-             v2elloeldm_between_c +
-             numofparties_c +
-             age_squ_c +
-             as.factor(gender) +
              as.factor(v2elparlel) +
+             v2elloeldm_c +
+             numofparties_c +
+             party_sys_age_c +
+             age_squ_c +
+             lr +
+             as.factor(gender) +
              as.factor(edu) +
              (1 | country_id/year_fact),
            data = cses_test, family = binomial(link = "logit"))
@@ -202,16 +207,24 @@ summary(m2)
 ## Party Representation: System populism- split between opposition and government
 
 m2a <- glmer(partyrep ~
-             opp_pop_within_c +
-             opp_pop_between_c +
-             ipop_within_c +
-             ipop_between_c +
-             v2elloeldm_within_c +
-             v2elloeldm_between_c +
-             numofparties_c +
-             age_squ_c +
-             as.factor(gender) +
+             lag_opp_pop_within_c +
+             lag_opp_pop_between_c +
+             lag_ipop_within_c +
+             lag_ipop_between_c +
+             v2elloeldm_c +
              as.factor(v2elparlel) +
+             party_sys_age_c +
+             unemploy_t0_within_c +
+             unemploy_t0_between_c +
+             gini_within_c +
+             gini_between_c +
+             numofparties_within_c +
+             numofparties_between_c +
+             age_squ_c +
+             lr_c +
+             radical_c +
+             as.factor(lr_missing) +
+             as.factor(gender) +
              as.factor(edu) +
              (1 | country_id/year_fact),
            data = cses_test, family = binomial(link = "logit"))
