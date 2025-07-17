@@ -127,6 +127,46 @@ corrplot(cor_matrix, method = "color", type = "upper", tl.col = "black", tl.srt 
 
 #### There seems to be some correlation between worrisome measures, but not enough to be worrisome. The highly correlated measures are not in the same mode (ipop and gov, for example)
 
+# Vector of variable names as character strings
+vars <- c(
+  "newpop_closest_within_c",
+  "newpop_closest_between_c",
+  "lag_opp_pop_within_c",
+  "lag_opp_pop_between_c",
+  "lag_ipop_within_c",
+  "lag_ipop_between_c",
+  "v2elloeldm_c",
+  "v2elparlel",
+  "party_sys_age_c",
+  "unemploy_t0_within_c",
+  "unemploy_t0_between_c",
+  "gini_within_c",
+  "gini_between_c",
+  "numofparties_within_c",
+  "numofparties_between_c",
+  "age_squ_c",
+  "lr_within_c",
+  "lr_between_c",
+  "radical_within_c",
+  "radical_between_c",
+  "lr_missing",
+  "gender",
+  "edu",
+  "newpop_closest_missing"
+)
+
+# Count number of missing observations per variable
+missing_counts <- sapply(vars, function(var) sum(is.na(cses_test[[var]])))
+
+# Convert to a data frame for better readability
+missing_df <- data.frame(Variable = names(missing_counts), Missing = missing_counts)
+
+# Print the result
+print(missing_df)
+
+
+
+
 #### Model fitting
 
 #### Simple Baseline models
@@ -442,8 +482,38 @@ m7a <- glmer(partyrep ~
              (1 | country_id/year_fact),
            data = cses_test, family = binomial(link = "logit"))
 
+#### Party Representation: Indy-system mix model
 
-summary(m7a)
+m8a <- glmer(partyrep ~ 
+               newpop_closest_within_c +
+               newpop_closest_between_c +
+               lag_opp_pop_within_c +
+               lag_opp_pop_between_c +
+               lag_ipop_within_c +
+               lag_ipop_between_c +
+               v2elloeldm_c +
+               as.factor(v2elparlel) +
+               party_sys_age_c +
+               unemploy_t0_within_c +
+               unemploy_t0_between_c +
+               gini_within_c +
+               gini_between_c +
+               numofparties_within_c +
+               numofparties_between_c +
+               age_squ_c +
+               lr_within_c +
+               lr_between_c +
+               radical_within_c +
+               radical_between_c +
+               as.factor(lr_missing) +
+               as.factor(gender) +
+               as.factor(edu) +
+               as.factor(newpop_closest_missing) +
+               (1 | country_id/year_fact),
+             data = cses_test, family = binomial(link = "logit"))
+
+
+summary(m8a)
 
 
 summary(m1)
