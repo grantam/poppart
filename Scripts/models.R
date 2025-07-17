@@ -20,22 +20,25 @@ library(corrplot)
 
 #### Load data
 
-cses_test <- readRDS(file = "cses_test.Rda")
+cses_test <- readRDS(file = "Data/cses_test.Rda")
 
 #### Define all variables used in the model
 
-model_vars <- c("how_rep", "sys_pop_within_c", "sys_pop_between_c",
-                "opp_pop_within_c",
-                "opp_pop_between_c",
-                "gov_pop_within_c",
-                "gov_pop_between_c",
-                "ipop_within_c",
-                "ipop_between_c",
+model_vars <- c("how_rep", "lag_sys_pop_within_c", "lag_sys_pop_between_c",
+                "lag_opp_pop_within_c",
+                "lag_opp_pop_between_c",
+                "lag_gov_pop_within_c",
+                "lag_gov_pop_between_c",
+                "lag_ipop_within_c",
+                "lag_ipop_between_c",
                 "v2elloeldm_c",
-                "unemploy_t0_within", "unemploy_t0_between",
+                "unemploy_t0_within_c", "unemploy_t0_between_c",
                 "age_squ_c", "numofparties_c",
                 "gender", "v2elparlel", "edu",
-                "party_sys_age", "lr")
+                "party_sys_age", "lr_within_c",
+                "lr_between_c",
+                "radical_between_c",
+                "radical_within_c")
 
 #### Filter dataset to relevant variables
 
@@ -101,8 +104,10 @@ fixed_vars <- c("lag_opp_pop_within_c" ,
                   "numofparties_within_c" ,
                   "numofparties_between_c" ,
                   "age_squ_c" ,
-                  "lr_c",
-                  "radical_c")
+                "lr_within_c",
+                "lr_between_c",
+                "radical_between_c",
+                "radical_within_c")
 
 #### Omit missing data
 
@@ -221,8 +226,10 @@ m2a <- glmer(partyrep ~
              numofparties_within_c +
              numofparties_between_c +
              age_squ_c +
-             lr_c +
-             radical_c +
+             lr_within_c +
+             lr_between_c +
+             radical_within_c +
+             radical_between_c +
              as.factor(lr_missing) +
              as.factor(gender) +
              as.factor(edu) +
@@ -250,20 +257,27 @@ summary(m3)
 
 ## Party Representation: Opposition only
 
-m3a <- glmer(partyrep ~ opp_pop_within_c +
-             opp_pop_between_c +
-             v2pariglef_within_c +
-             v2pariglef_between_c +
-             v2elloeldm_within_c +
-             v2elloeldm_between_c +
-             numofparties_c +
-             age_squ_within_c +
-             age_squ_between_c +
-             as.factor(gender) +
-             as.factor(v2elparlel) +
-             as.factor(edu) +
-             (1| country_id) +
-             (1 | country_id:year_fact),
+m3a <- glmer(partyrep ~
+               lag_opp_pop_within_c +
+               lag_opp_pop_between_c +
+               v2elloeldm_c +
+               as.factor(v2elparlel) +
+               party_sys_age_c +
+               unemploy_t0_within_c +
+               unemploy_t0_between_c +
+               gini_within_c +
+               gini_between_c +
+               numofparties_within_c +
+               numofparties_between_c +
+               age_squ_c +
+               lr_within_c +
+               lr_between_c +
+               radical_within_c +
+               radical_between_c +
+               as.factor(lr_missing) +
+               as.factor(gender) +
+               as.factor(edu) +
+               (1 | country_id/year_fact),
            data = cses_test, 
            family = binomial(link = "logit"))
 
@@ -271,38 +285,53 @@ summary(m3a)
 
 ## Partisan Strength: Incumbent Only
 
-m4 <- clmm(how_rep ~ ipop_within_c +
-             ipop_between_c +
-             v2pariglef_within_c +
-             v2pariglef_between_c +
-             v2elloeldm_within_c +
-             v2elloeldm_between_c +
-             numofparties_c +
-             age_squ_within_c +
-             age_squ_between_c +
-             as.factor(gender) +
+m4 <- clmm(how_rep ~
+             lag_gov_pop_within_c +
+             lag_gov_pop_between_c +
+             v2elloeldm_c +
              as.factor(v2elparlel) +
+             party_sys_age_c +
+             unemploy_t0_within_c +
+             unemploy_t0_between_c +
+             gini_within_c +
+             gini_between_c +
+             numofparties_within_c +
+             numofparties_between_c +
+             age_squ_c +
+             lr_within_c +
+             lr_between_c +
+             radical_within_c +
+             radical_between_c +
+             as.factor(lr_missing) +
+             as.factor(gender) +
              as.factor(edu) +
-             (1| country_id) +
-             (1 | country_id:year_fact),
+             (1 | country_id/year_fact),
            data = cses_test)
 
 summary(m4)
 
 ## Party Representation: Incumbent Only
 
-m4a <- glmer(partyrep ~ ipop_within_c +
-             ipop_between_c +
-             v2elloeldm_within_c +
-             v2elloeldm_between_c +
-             numofparties_c +
-             age_squ_within_c +
-             age_squ_between_c +
-             as.factor(gender) +
-             as.factor(v2elparlel) +
-             as.factor(edu) +
-             (1| country_id) +
-             (1 | country_id:year_fact),
+m4a <- glmer(partyrep ~ lag_ipop_within_c +
+               lag_ipop_between_c +
+               v2elloeldm_c +
+               as.factor(v2elparlel) +
+               party_sys_age_c +
+               unemploy_t0_within_c +
+               unemploy_t0_between_c +
+               gini_within_c +
+               gini_between_c +
+               numofparties_within_c +
+               numofparties_between_c +
+               age_squ_c +
+               lr_within_c +
+               lr_between_c +
+               radical_within_c +
+               radical_between_c +
+               as.factor(lr_missing) +
+               as.factor(gender) +
+               as.factor(edu) +
+               (1 | country_id/year_fact),
            data = cses_test,
            family = binomial(link = "logit"))
 

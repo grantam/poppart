@@ -140,7 +140,7 @@ inst <- vdem %>%
   ) %>%
   ungroup()
 
-incomeineq <- read_csv("incomeineq.csv") %>%
+incomeineq <- read_csv("Data/incomeineq.csv") %>%
   select(year, country, gini = gini_disp) %>%
   mutate(ccodecow = countrycode(country, origin = "country.name", destination = "cown"))
 
@@ -220,7 +220,7 @@ cses_clean <- cses %>%
          lr_missing = as.factor(ifelse(is.na(lr) == T, 1, 0)),
          lr = lr - 5,
          lr = ifelse(lr_missing == 1, 0, lr),
-         col = abs(lr))
+         radical = abs(lr))
 
 
 cses_clean1 <- left_join(cses_clean, df, by = c("country_id", "year")) %>%
@@ -268,7 +268,7 @@ cses_demeaned <- demean(cses_clean5, select = c("sys_pop", "ipop", "v2pariglef",
   mutate(age_squ = age*age,
          countryear = as.factor(paste0(country_text_id, year)))
   
-cses_demeaned1 <- demean(cses_demeaned, select = c("age", "age_squ", "newpop_voted", "newpop_closest", "ses", "lr"), by = c("countryear"))
+cses_demeaned1 <- demean(cses_demeaned, select = c("age", "age_squ", "newpop_voted", "newpop_closest", "ses", "lr", "radical"), by = c("countryear"))
 
 cses_test <- cses_demeaned1 %>%
   mutate(
@@ -300,13 +300,14 @@ cses_test <- cses_demeaned1 %>%
       gini_within,
       unemploy_t0_between,
       unemploy_t0_within,
-      lr,
-      radical
+      lr_within,
+      lr_between,
+      radical_within,
+      radical_between
     ),
     ~ (. - mean(., na.rm = TRUE)) / (2 * sd(., na.rm = TRUE)),
     .names = "{.col}_c"
-  )) %>%
-  mutate()
+  ))
 
 
 
@@ -318,4 +319,4 @@ cses_test$edu <- as.factor(cses_test$edu)
 cses_test$how_rep <- as.factor(cses_test$how_rep)
 
 
-saveRDS(cses_test, file = "cses_test.Rda")
+saveRDS(cses_test, file = "Data/cses_test.Rda")
