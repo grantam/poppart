@@ -60,19 +60,21 @@ summary(summary_data)
 
 #### Define all variables used in the model
 
-model_vars <- c("partyrep", "sys_pop_within_c", "sys_pop_between_c",
-                "opp_pop_within_c",
-                "opp_pop_between_c",
-                "gov_pop_within_c",
-                "gov_pop_between_c",
-                "ipop_within_c",
-                "ipop_between_c",
+model_vars <- c("how_rep", "lag_sys_pop_within_c", "lag_sys_pop_between_c",
+                "lag_opp_pop_within_c",
+                "lag_opp_pop_between_c",
+                "lag_gov_pop_within_c",
+                "lag_gov_pop_between_c",
+                "lag_ipop_within_c",
+                "lag_ipop_between_c",
                 "v2elloeldm_c",
-                "unemploy_t0_within", "unemploy_t0_between",
+                "unemploy_t0_within_c", "unemploy_t0_between_c",
                 "age_squ_c", "numofparties_c",
                 "gender", "v2elparlel", "edu",
-                "party_sys_age", "lr")
-
+                "party_sys_age", "lr_within_c",
+                "lr_between_c",
+                "radical_between_c",
+                "radical_within_c")
 #### Filter dataset to relevant variables
 
 summary_data <- cses_test %>% 
@@ -95,6 +97,8 @@ fixed_vars <- c("lag_opp_pop_within_c" ,
                   "lag_opp_pop_between_c" ,
                   "lag_ipop_within_c" ,
                   "lag_ipop_between_c" ,
+                "lag_sys_pop_between_c",
+                "lag_sys_pop_within_c",
                   "v2elloeldm_c" ,
                   "party_sys_age_c" ,
                   "unemploy_t0_within_c" ,
@@ -196,17 +200,24 @@ summary(m0a)
 ## Partisan Strength : System Populism
 
 m1 <- clmm(how_rep ~ 
-             sys_pop_within_c +
-             sys_pop_between_c +
-             v2elloeldm_within_c +
-             v2elloeldm_between_c +
-             unemploy_t0_within +
-             unemploy_t0_between +
-             party_sys_age +
-             age_squ_c +
-             numofparties_c +
-             as.factor(gender) +
+             lag_sys_pop_within_c +
+             lag_sys_pop_between_c +
+             v2elloeldm_c +
              as.factor(v2elparlel) +
+             party_sys_age_c +
+             unemploy_t0_within_c +
+             unemploy_t0_between_c +
+             gini_within_c +
+             gini_between_c +
+             numofparties_within_c +
+             numofparties_between_c +
+             age_squ_c +
+             lr_within_c +
+             lr_between_c +
+             radical_within_c +
+             radical_between_c +
+             as.factor(lr_missing) +
+             as.factor(gender) +
              as.factor(edu) +
              (1 | country_id/year_fact),
            data = cses_test)
@@ -217,16 +228,25 @@ summary(m1)
 
 
 m1a <- glmer(partyrep ~ 
-             sys_pop_within_c +
-             sys_pop_between_c +
-             as.factor(v2elparlel) +
-             v2elloeldm_c +
-             numofparties_c +
-             party_sys_age_c +
-             age_squ_c +
-             lr +
-             as.factor(gender) +
-             as.factor(edu) +
+               lag_sys_pop_within_c +
+               lag_sys_pop_between_c +
+               v2elloeldm_c +
+               as.factor(v2elparlel) +
+               party_sys_age_c +
+               unemploy_t0_within_c +
+               unemploy_t0_between_c +
+               gini_within_c +
+               gini_between_c +
+               numofparties_within_c +
+               numofparties_between_c +
+               age_squ_c +
+               lr_within_c +
+               lr_between_c +
+               radical_within_c +
+               radical_between_c +
+               as.factor(lr_missing) +
+               as.factor(gender) +
+               as.factor(edu) +
              (1 | country_id/year_fact),
            data = cses_test, family = binomial(link = "logit"))
 
@@ -426,16 +446,26 @@ summary(m5a)
 ## Partisan Strength: System populism- Split between opposition and government
 
 m6 <- clmm(how_rep ~ 
-             gov_pop_within_c +
-             gov_pop_between_c +
-             opp_pop_within_c +
-             opp_pop_between_c +
-             v2elloeldm_within_c +
-             v2elloeldm_between_c +
-             numofparties_c +
-             age_squ_c +
-             as.factor(gender) +
+             lag_opp_pop_within_c +
+             lag_opp_pop_between_c +
+             lag_gov_pop_within_c +
+             lag_gov_pop_between_c +
+             v2elloeldm_c +
              as.factor(v2elparlel) +
+             party_sys_age_c +
+             unemploy_t0_within_c +
+             unemploy_t0_between_c +
+             gini_within_c +
+             gini_between_c +
+             numofparties_within_c +
+             numofparties_between_c +
+             age_squ_c +
+             lr_within_c +
+             lr_between_c +
+             radical_within_c +
+             radical_between_c +
+             as.factor(lr_missing) +
+             as.factor(gender) +
              as.factor(edu) +
              (1 | country_id/year_fact),
            data = cses_test)
@@ -444,17 +474,28 @@ summary(m6)
 
 ## Party Representation: System populism- Split between opposition and government
 
-m6a <- glmer(how_rep ~ gov_pop_within_c +
-             gov_pop_between_c +
-             opp_pop_within_c +
-             opp_pop_between_c +
-             v2elloeldm_within_c +
-             v2elloeldm_between_c +
-             numofparties_c +
-             age_squ_c +
-             as.factor(gender) +
-             as.factor(v2elparlel) +
-             as.factor(edu) +
+m6a <- glmer(how_rep ~ 
+               lag_opp_pop_within_c +
+               lag_opp_pop_between_c +
+               lag_gov_pop_within_c +
+               lag_gov_pop_between_c +
+               v2elloeldm_c +
+               as.factor(v2elparlel) +
+               party_sys_age_c +
+               unemploy_t0_within_c +
+               unemploy_t0_between_c +
+               gini_within_c +
+               gini_between_c +
+               numofparties_within_c +
+               numofparties_between_c +
+               age_squ_c +
+               lr_within_c +
+               lr_between_c +
+               radical_within_c +
+               radical_between_c +
+               as.factor(lr_missing) +
+               as.factor(gender) +
+               as.factor(edu) +
              (1 | country_id/year_fact),
            data = cses_test,
            family = binomial(link = "logit"))
@@ -543,6 +584,39 @@ summary(m4a)
 summary(m5a)
 summary(m6a)
 summary(m7a)
+
+
+plot_model_coefficients <- function(model, model_name) {
+  broom.mixed::tidy(model, effects = "fixed") %>%
+    filter(term != "(Intercept)") %>%
+    ggplot(aes(x = estimate, y = term)) +
+    geom_point() +
+    geom_pointrange(aes(xmin = estimate - 1.96 * std.error,
+                       xmax = estimate + 1.96 * std.error),
+                   height = 0.2) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
+    labs(
+      title = paste("Coefficient Plot:", model_name),
+      x = "Estimate (with 95% CI)",
+      y = NULL
+    ) +
+    theme_minimal()
+}
+
+plot_model_coefficients(m1a, "PartyRep: System Populism")
+plot_model_coefficients(m1, "HowRep: System Populism")
+
+
+plots <- list(
+  plot_model_coefficients(model_partyrep_syspop, "PartyRep: System Populism"),
+  plot_model_coefficients(model_partyrep_govopp, "PartyRep: Gov & Opp Populism"),
+  plot_model_coefficients(model_partyrep_opposition, "PartyRep: Opposition Populism"),
+  plot_model_coefficients(model_howrep_syspop, "HowRep: System Populism"),
+  plot_model_coefficients(model_howrep_govopp, "HowRep: Gov & Opp Populism"),
+  plot_model_coefficients(model_howrep_opposition, "HowRep: Opposition Populism")
+)
+
+
 
 
 
