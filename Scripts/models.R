@@ -604,7 +604,7 @@ plot_model_coefficients <- function(model, model_name) {
 }
 
 plot_model_coefficients(m1a, "PartyRep: System Populism")
-plot_model_coefficients(m1, "HowRep: System Populism")
+plot_model_coefficients(m6, "HowRep: System Populism")
 
 
 plots <- list(
