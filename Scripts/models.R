@@ -164,7 +164,8 @@ missing_df <- data.frame(Variable = names(missing_counts), Missing = missing_cou
 # Print the result
 print(missing_df)
 
-
+missing <- cses_test %>%
+  filter(is.na(lag_ipop) == T)
 
 
 #### Model fitting
@@ -234,16 +235,26 @@ summary(m1a)
 ## Partisan Strength: System populism- split between opposition and government
 
 m2 <- clmm(how_rep ~
-             opp_pop_within_c +
-             opp_pop_between_c +
-             ipop_within_c +
-             ipop_between_c +
-             v2elloeldm_within_c +
-             v2elloeldm_between_c +
-             numofparties_c +
-             age_squ_c +
-             as.factor(gender) +
+             lag_opp_pop_within_c +
+             lag_opp_pop_between_c +
+             lag_ipop_within_c +
+             lag_ipop_between_c +
+             v2elloeldm_c +
              as.factor(v2elparlel) +
+             party_sys_age_c +
+             unemploy_t0_within_c +
+             unemploy_t0_between_c +
+             gini_within_c +
+             gini_between_c +
+             numofparties_within_c +
+             numofparties_between_c +
+             age_squ_c +
+             lr_within_c +
+             lr_between_c +
+             radical_within_c +
+             radical_between_c +
+             as.factor(lr_missing) +
+             as.factor(gender) +
              as.factor(edu) +
              (1 | country_id/year_fact),
            data = cses_test)

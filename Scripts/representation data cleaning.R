@@ -263,8 +263,7 @@ df_ind2 <- df_ind %>%
 cses_clean4 <- left_join(cses_clean3, df_ind1, by = c("year", "closest_party", "country_id"))
 
 cses_clean5 <- left_join(cses_clean4, df_ind2, by = c("year", "voted_party", "country_id")) %>%
-  mutate(newpop_closest_missing = ifelse(is.na(newpop_closest)==T, 1, 0),
-         newpop_closest = ifelse(newpop_closest_missing == 1, mean(cses_clean4$newpop_closest, na.rm = T), newpop_closest))
+  mutate(newpop_closest_missing = ifelse(is.na(newpop_closest)==T, 1, 0))
 
 cses_demeaned <- demean(cses_clean5, select = c("sys_pop", "ipop", "v2pariglef", "gov_pop", "opp_pop", "unemploy_t0", "gdpg_t0", "gdppc_t0", "lag_sys_pop", "lag_ipop", "lag_gov_pop", "lag_opp_pop", "gini", "numofparties"), by =  "country_id") %>%
   mutate(age_squ = age*age,
@@ -309,7 +308,8 @@ cses_test <- cses_demeaned1 %>%
     ),
     ~ (. - mean(., na.rm = TRUE)) / (2 * sd(., na.rm = TRUE)),
     .names = "{.col}_c"
-  ))
+  )) %>%
+  distinct(eleid, resid, .keep_all = TRUE)
 
 
 
