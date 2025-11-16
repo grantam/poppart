@@ -54,7 +54,7 @@ incumbent <- vparty2 %>%
 party3 <- left_join(party, incumbent, by = c("year", "country_id"))
 party4 <- left_join(party3, opp, by = c("year", "country_id"))
 party_final <- left_join(party4, gov, by = c("year", "country_id"))
-
+ 
 party_final <- party_final %>%
   arrange(country_id, year) %>% 
   group_by(country_id) %>%
@@ -220,7 +220,21 @@ cses_clean <- cses %>%
          lr_missing = as.factor(ifelse(is.na(lr) == T, 1, 0)),
          lr = lr - 5,
          lr = ifelse(lr_missing == 1, 0, lr),
-         radical = abs(lr))
+         radical = abs(lr)) %>%
+  mutate(across(IMD3008_A:IMD3008_I,
+                ~ ifelse(. %in% c(96,97,98,99), NA, .)))
+
+vars <- paste0("IMD3008_", LETTERS[1:9])
+
+cses_clean <- cses_clean %>%
+  rowwise() %>%
+  mutate(feel_avg = mean(c_across(all_of(vars)),
+                        na.rm = TRUE),
+         feel_max = max(c_across(all_of(vars)),
+                        na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(feel_max = ifelse(feel_max == -Inf, NA, feel_max),
+         feel_avg = ifelse(feel_avg == -Inf, NA, feel_avg),)
 
 
 cses_clean1 <- left_join(cses_clean, df, by = c("country_id", "year")) %>%
@@ -311,8 +325,6 @@ cses_test <- cses_demeaned1 %>%
   )) %>%
   distinct(eleid, resid, .keep_all = TRUE)
 
-
-
 cses_test$year_fact <- as.factor(cses_test$year_fact)
 cses_test$country_id <- as.factor(cses_test$country_id)
 cses_test$gender <- as.factor(cses_test$gender)
@@ -320,5 +332,8 @@ cses_test$v2elparlel <- as.factor(cses_test$v2elparlel)
 cses_test$edu <- as.factor(cses_test$edu)
 cses_test$how_rep <- as.factor(cses_test$how_rep)
 
+cses_test <- cses_test %>%
+  add_count(resid, eleid) %>%
+  filter(n == 1)
 
 saveRDS(cses_test, file = "Data/cses_test.Rda")
