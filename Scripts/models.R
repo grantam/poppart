@@ -196,6 +196,17 @@ m0a <- glmer(partyrep ~
 
 summary(m0a)
 
+m0b <- lmer(feel_max ~ 
+               sys_pop_within_c +
+               sys_pop_between_c +
+               (1 | country_id/year_fact),
+             data = cses_test)
+
+summary(m0b)
+
+broom.mixed::tidy(m0b)
+
+
 
 ## Partisan Strength : System Populism
 
@@ -251,6 +262,23 @@ m1a <- glmer(partyrep ~
            data = cses_test, family = binomial(link = "logit"))
 
 summary(m1a)
+
+
+m1b <- lmer(feel_max ~ 
+               sys_pop_within_c +
+               sys_pop_between_c +
+               as.factor(v2elparlel) +
+               v2elloeldm_c +
+               numofparties_c +
+               party_sys_age_c +
+               age_squ_c +
+               lr +
+               as.factor(gender) +
+               as.factor(edu) +
+               (1 | country_id/year_fact),
+             data = cses_test)
+
+summary(m1b)
 
 ## Partisan Strength: System populism- split between opposition and government
 
@@ -308,6 +336,34 @@ m2a <- glmer(partyrep ~
            data = cses_test, family = binomial(link = "logit"))
 
 summary(m2a)
+
+
+m2b <- lmer(feel_max ~
+               lag_opp_pop_within_c +
+               lag_opp_pop_between_c +
+               lag_ipop_within_c +
+               lag_ipop_between_c +
+               v2elloeldm_c +
+               as.factor(v2elparlel) +
+               party_sys_age_c +
+               unemploy_t0_within_c +
+               unemploy_t0_between_c +
+               gini_within_c +
+               gini_between_c +
+               numofparties_within_c +
+               numofparties_between_c +
+               age_squ_c +
+               lr_within_c +
+               lr_between_c +
+               radical_within_c +
+               radical_between_c +
+               as.factor(lr_missing) +
+               as.factor(gender) +
+               as.factor(edu) +
+               (1 | country_id/year_fact),
+             data = cses_test)
+
+summary(m2b)
 
 ## Partisan Strength: Opposition only
 
