@@ -336,4 +336,17 @@ cses_test <- cses_test %>%
   add_count(resid, eleid) %>%
   filter(n == 1)
 
+cses_test <- cses_test %>%
+  group_by(country_id) %>%
+  mutate(time = year - min(year)) %>%
+  ungroup()
+
+# Natural cubic spline with 3 df
+spline_basis <- ns(cses_test$time, df = 3)
+
+# Add spline basis columns to data
+cses_test$spline1 <- spline_basis[, 1]
+cses_test$spline2 <- spline_basis[, 2]
+cses_test$spline3 <- spline_basis[, 3]
+
 saveRDS(cses_test, file = "Data/cses_test.Rda")
