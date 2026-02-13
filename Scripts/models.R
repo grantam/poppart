@@ -456,8 +456,10 @@ summary(m2b)
 summary(m2b_spline)
 
 mlist <- list(
-  "Time Model" = m2b,
-  "Spline Model" = m2b_spline_rand
+  "Time Ordered Logit" = m2,
+  "Spline Ordered Logit" = m2_spline,
+  "Time MEOLS" = m2b,
+  "Spline MEOLS" = m2b_spline
 )
 
 modelsummary::modelsummary(mlist, output = "latex")
