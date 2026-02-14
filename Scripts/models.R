@@ -14,76 +14,84 @@ library(plm)
 library(reghelper)
 library(datawizard)
 library(stargazer)
-library(ordinal)
 library(data.table)
 library(corrplot)
 library(splines)
 
-#### Load data
+# =============================================================================
+# UTILITY FUNCTIONS
+# =============================================================================
+
+# Compute Bayes Factor approximation from BIC values
+# BF > 1 favors model 1 over model 0; BF < 1 favors model 0
+# Interpretation (Kass & Raftery 1995):
+#   BF 1-3: barely worth mentioning
+#   BF 3-20: positive evidence
+#   BF 20-150: strong evidence
+#   BF >150: very strong evidence
+bic_bayes_factor <- function(bic0, bic1) {
+  exp((bic0 - bic1) / 2)
+}
+
+# Compare a list of models on AIC, BIC, and pairwise Bayes factors vs baseline
+compare_models <- function(model_list) {
+  comparison <- tibble(
+    model = names(model_list),
+    AIC   = sapply(model_list, AIC),
+    BIC   = sapply(model_list, BIC)
+  )
+
+  bic_baseline <- comparison$BIC[1]
+  comparison <- comparison %>%
+    mutate(BF_vs_baseline = bic_bayes_factor(bic_baseline, BIC))
+
+  comparison
+}
+
+# Coefficient plot for any mixed model
+plot_model_coefficients <- function(model, model_name) {
+  broom.mixed::tidy(model, effects = "fixed") %>%
+    filter(term != "(Intercept)") %>%
+    ggplot(aes(x = estimate, y = term)) +
+    geom_point() +
+    geom_pointrange(aes(xmin = estimate - 1.96 * std.error,
+                       xmax = estimate + 1.96 * std.error),
+                   height = 0.2) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
+    labs(
+      title = paste("Coefficient Plot:", model_name),
+      x = "Estimate (with 95% CI)",
+      y = NULL
+    ) +
+    theme_minimal()
+}
+
+# =============================================================================
+# LOAD DATA
+# =============================================================================
 
 cses_test <- readRDS(file = "Data/cses_test.Rda")
 
-#### Define all variables used in the model
+# =============================================================================
+# DIAGNOSTICS: SUMMARY STATISTICS, CORRELATIONS, AND MISSINGNESS
+# =============================================================================
 
-model_vars <- c("how_rep", "lag_sys_pop_within_c", "lag_sys_pop_between_c",
-                "lag_opp_pop_within_c",
-                "lag_opp_pop_between_c",
-                "lag_gov_pop_within_c",
-                "lag_gov_pop_between_c",
-                "lag_ipop_within_c",
-                "lag_ipop_between_c",
+#### Summary statistics for key model variables
+
+model_vars <- c("party_fav", "partyrep",
+                "lag_sys_pop_within_c", "lag_sys_pop_between_c",
+                "lag_opp_pop_within_c", "lag_opp_pop_between_c",
+                "lag_gov_pop_within_c", "lag_gov_pop_between_c",
+                "lag_ipop_within_c", "lag_ipop_between_c",
                 "v2elloeldm_c",
                 "unemploy_t0_within_c", "unemploy_t0_between_c",
-                "age_squ_c", "numofparties_c",
+                "age_squ_c", "numofparties_within_c", "numofparties_between_c",
                 "gender", "v2elparlel", "edu",
-                "party_sys_age", "lr_within_c",
-                "lr_between_c",
-                "radical_between_c",
-                "radical_within_c")
+                "party_sys_age_c", "lr_within_c", "lr_between_c",
+                "lr_sq_within_c", "lr_sq_between_c")
 
-#### Filter dataset to relevant variables
-
-summary_data <- cses_test %>% 
-  select(all_of(model_vars))
-
-#### Convert categorical variables to factors
-
-summary_data <- summary_data %>%
-  mutate(gender = as.factor(gender),
-         v2elparlel = as.factor(v2elparlel),
-         edu = as.factor(edu),
-         how_rep_cata = as.factor(how_rep)) %>%
-  na.omit()
-
-summary(summary_data)
-
-#### Now the same process for the dictmous question
-
-#### Define all variables used in the model
-
-model_vars <- c("how_rep", "lag_sys_pop_within_c", "lag_sys_pop_between_c",
-                "lag_opp_pop_within_c",
-                "lag_opp_pop_between_c",
-                "lag_gov_pop_within_c",
-                "lag_gov_pop_between_c",
-                "lag_ipop_within_c",
-                "lag_ipop_between_c",
-                "v2elloeldm_c",
-                "unemploy_t0_within_c", "unemploy_t0_between_c",
-                "age_squ_c", "numofparties_c",
-                "gender", "v2elparlel", "edu",
-                "party_sys_age", "lr_within_c",
-                "lr_between_c",
-                "radical_between_c",
-                "radical_within_c")
-#### Filter dataset to relevant variables
-
-summary_data <- cses_test %>% 
-  select(all_of(model_vars))
-
-#### Convert categorical variables to factors
-
-summary_data <- summary_data %>%
+summary_data <- cses_test %>%
+  select(all_of(model_vars)) %>%
   mutate(gender = as.factor(gender),
          v2elparlel = as.factor(v2elparlel),
          edu = as.factor(edu)) %>%
@@ -91,105 +99,68 @@ summary_data <- summary_data %>%
 
 summary(summary_data)
 
+#### Correlation matrix for continuous fixed-effect variables
 
-#### List of continuous fixed-effect variables
-
-fixed_vars <- c("lag_opp_pop_within_c" ,
-                  "lag_opp_pop_between_c" ,
-                  "lag_ipop_within_c" ,
-                  "lag_ipop_between_c" ,
-                "lag_sys_pop_between_c",
-                "lag_sys_pop_within_c",
-                  "v2elloeldm_c" ,
-                  "party_sys_age_c" ,
-                  "unemploy_t0_within_c" ,
-                  "unemploy_t0_between_c" ,
-                  "gini_within_c" ,
-                  "gini_between_c",
-                  "numofparties_within_c" ,
-                  "numofparties_between_c" ,
-                  "age_squ_c" ,
-                "lr_within_c",
-                "lr_between_c",
-                "radical_between_c",
-                "radical_within_c")
-
-#### Omit missing data
+fixed_vars <- c("lag_opp_pop_within_c", "lag_opp_pop_between_c",
+                "lag_ipop_within_c", "lag_ipop_between_c",
+                "lag_sys_pop_between_c", "lag_sys_pop_within_c",
+                "v2elloeldm_c", "party_sys_age_c",
+                "unemploy_t0_within_c", "unemploy_t0_between_c",
+                "gini_within_c", "gini_between_c",
+                "numofparties_within_c", "numofparties_between_c",
+                "age_squ_c",
+                "lr_within_c", "lr_between_c",
+                "lr_sq_within_c", "lr_sq_between_c")
 
 cor_data <- cses_test %>%
   select(all_of(fixed_vars)) %>%
   na.omit()
 
-
-# Compute correlation matrix
-
 cor_matrix <- cor(cor_data)
-
 print(round(cor_matrix, 2))
-
 corrplot(cor_matrix, method = "color", type = "upper", tl.col = "black", tl.srt = 45)
 
+# Some correlation between measures, but not worrisome. Highly correlated
+# measures are not in the same model (e.g., ipop and gov)
 
-#### There seems to be some correlation between worrisome measures, but not enough to be worrisome. The highly correlated measures are not in the same mode (ipop and gov, for example)
+#### Missingness diagnostics
 
-# Vector of variable names as character strings
-vars <- c(
-  "newpop_closest_within_c",
-  "newpop_closest_between_c",
-  "lag_opp_pop_within_c",
-  "lag_opp_pop_between_c",
-  "lag_ipop_within_c",
-  "lag_ipop_between_c",
-  "v2elloeldm_c",
-  "v2elparlel",
-  "party_sys_age_c",
-  "unemploy_t0_within_c",
-  "unemploy_t0_between_c",
-  "gini_within_c",
-  "gini_between_c",
-  "numofparties_within_c",
-  "numofparties_between_c",
+miss_vars <- c(
+  "newpop_closest_within_c", "newpop_closest_between_c",
+  "lag_opp_pop_within_c", "lag_opp_pop_between_c",
+  "lag_ipop_within_c", "lag_ipop_between_c",
+  "v2elloeldm_c", "v2elparlel", "party_sys_age_c",
+  "unemploy_t0_within_c", "unemploy_t0_between_c",
+  "gini_within_c", "gini_between_c",
+  "numofparties_within_c", "numofparties_between_c",
   "age_squ_c",
-  "lr_within_c",
-  "lr_between_c",
-  "radical_within_c",
-  "radical_between_c",
-  "lr_missing",
-  "gender",
-  "edu",
-  "newpop_closest_missing"
+  "lr_within_c", "lr_between_c",
+  "lr_sq_within_c", "lr_sq_between_c",
+  "lr_missing", "gender", "edu",
+  "newpop_closest_missing", "partisan_type"
 )
 
-# Count number of missing observations per variable
-missing_counts <- sapply(vars, function(var) sum(is.na(cses_test[[var]])))
-
-# Convert to a data frame for better readability
+missing_counts <- sapply(miss_vars, function(var) sum(is.na(cses_test[[var]])))
 missing_df <- data.frame(Variable = names(missing_counts), Missing = missing_counts)
-
-# Print the result
 print(missing_df)
 
-missing <- cses_test %>%
-  filter(is.na(lag_ipop) == T)
+# =============================================================================
+# MODEL FITTING
+# =============================================================================
 
+# Full control set used across most models:
+#   Institutional: v2elloeldm_c, v2elparlel, party_sys_age_c
+#   Economic: unemploy_t0 (within/between), gini (within/between)
+#   Party system: numofparties (within/between)
+#   Individual: age_squ_c, lr (within/between), lr_sq (within/between),
+#               lr_missing, gender, edu
 
-#### Model fitting
+# =============================================================================
+# BASELINE MODELS (m0 series): System populism only, no controls
+# =============================================================================
 
-#### Simple Baseline models
-
-## Partisan Strength
-
-m0 <- clmm(how_rep ~ 
-             sys_pop_within_c +
-             sys_pop_between_c +
-             (1 | country_id/year_fact),
-           data = cses_test)
-
-summary(m0)
-
-## Party Representation
-
-m0a <- glmer(partyrep ~ 
+## Party Representation (binary: feels represented by a party)
+m0a <- glmer(partyrep ~
                sys_pop_within_c +
                sys_pop_between_c +
                (1 | country_id/year_fact),
@@ -197,7 +168,8 @@ m0a <- glmer(partyrep ~
 
 summary(m0a)
 
-m0b <- lmer(feel_max ~ 
+## Party Favorability (continuous: feeling thermometer for preferred party)
+m0b <- lmer(party_fav ~
                sys_pop_within_c +
                sys_pop_between_c +
                (1 | country_id/year_fact),
@@ -205,41 +177,12 @@ m0b <- lmer(feel_max ~
 
 summary(m0b)
 
-broom.mixed::tidy(m0b)
+# =============================================================================
+# M1 SERIES: System populism with full controls
+# =============================================================================
 
-
-
-## Partisan Strength : System Populism
-
-m1 <- clmm(how_rep ~ 
-             lag_sys_pop_within_c +
-             lag_sys_pop_between_c +
-             v2elloeldm_c +
-             as.factor(v2elparlel) +
-             party_sys_age_c +
-             unemploy_t0_within_c +
-             unemploy_t0_between_c +
-             gini_within_c +
-             gini_between_c +
-             numofparties_within_c +
-             numofparties_between_c +
-             age_squ_c +
-             lr_within_c +
-             lr_between_c +
-             radical_within_c +
-             radical_between_c +
-             as.factor(lr_missing) +
-             as.factor(gender) +
-             as.factor(edu) +
-             (1 | country_id/year_fact),
-           data = cses_test)
-
-summary(m1)
-
-## Party Representation : System Populism
-
-
-m1a <- glmer(partyrep ~ 
+## Party Representation: System Populism
+m1a <- glmer(partyrep ~
                lag_sys_pop_within_c +
                lag_sys_pop_between_c +
                v2elloeldm_c +
@@ -254,8 +197,8 @@ m1a <- glmer(partyrep ~
                age_squ_c +
                lr_within_c +
                lr_between_c +
-               radical_within_c +
-               radical_between_c +
+               lr_sq_within_c +
+               lr_sq_between_c +
                as.factor(lr_missing) +
                as.factor(gender) +
                as.factor(edu) +
@@ -264,16 +207,25 @@ m1a <- glmer(partyrep ~
 
 summary(m1a)
 
-
-m1b <- lmer(feel_max ~ 
-               sys_pop_within_c +
-               sys_pop_between_c +
-               as.factor(v2elparlel) +
+## Party Favorability: System Populism
+m1b <- lmer(party_fav ~
+               lag_sys_pop_within_c +
+               lag_sys_pop_between_c +
                v2elloeldm_c +
-               numofparties_c +
+               as.factor(v2elparlel) +
                party_sys_age_c +
+               unemploy_t0_within_c +
+               unemploy_t0_between_c +
+               gini_within_c +
+               gini_between_c +
+               numofparties_within_c +
+               numofparties_between_c +
                age_squ_c +
-               lr +
+               lr_within_c +
+               lr_between_c +
+               lr_sq_within_c +
+               lr_sq_between_c +
+               as.factor(lr_missing) +
                as.factor(gender) +
                as.factor(edu) +
                (1 | country_id/year_fact),
@@ -281,63 +233,11 @@ m1b <- lmer(feel_max ~
 
 summary(m1b)
 
-## Partisan Strength: System populism- split between opposition and government
+# =============================================================================
+# M2 SERIES: Opp + Incumbent split, with time trends
+# =============================================================================
 
-m2 <- clmm(how_rep ~
-             lag_opp_pop_within_c +
-             lag_opp_pop_between_c +
-             lag_ipop_within_c +
-             lag_ipop_between_c +
-             v2elloeldm_c +
-             as.factor(v2elparlel) +
-             party_sys_age_c +
-             unemploy_t0_within_c +
-             unemploy_t0_between_c +
-             gini_within_c +
-             gini_between_c +
-             numofparties_within_c +
-             numofparties_between_c +
-             age_squ_c +
-             lr_within_c +
-             lr_between_c +
-             radical_within_c +
-             radical_between_c +
-             as.factor(lr_missing) +
-             as.factor(gender) +
-             as.factor(edu) +
-             time +
-             (1 + time | country_id) + (1 | country_id:year_fact),
-           data = cses_test)
-
-m2_spline <- clmm(how_rep ~
-             lag_opp_pop_within_c +
-             lag_opp_pop_between_c +
-             lag_ipop_within_c +
-             lag_ipop_between_c +
-             v2elloeldm_c +
-             as.factor(v2elparlel) +
-             party_sys_age_c +
-             unemploy_t0_within_c +
-             unemploy_t0_between_c +
-             gini_within_c +
-             gini_between_c +
-             numofparties_within_c +
-             numofparties_between_c +
-             age_squ_c +
-             lr_within_c +
-             lr_between_c +
-             radical_within_c +
-             radical_between_c +
-             as.factor(lr_missing) +
-             as.factor(gender) +
-             as.factor(edu) +
-             spline1 + spline2 + spline3 +  # fixed effect for spline
-             (spline1 + spline2 + spline3 | country_id) +  # random slopes for country
-             (1 | country_id:year_fact),
-           data = cses_test)
-
-## Party Representation: System populism- split between opposition and government
-
+## Party Representation: Opp + Incumbent (linear time)
 m2a <- glmer(partyrep ~
              lag_opp_pop_within_c +
              lag_opp_pop_between_c +
@@ -355,8 +255,8 @@ m2a <- glmer(partyrep ~
              age_squ_c +
              lr_within_c +
              lr_between_c +
-             radical_within_c +
-             radical_between_c +
+             lr_sq_within_c +
+             lr_sq_between_c +
              as.factor(lr_missing) +
              as.factor(gender) +
              as.factor(edu) +
@@ -364,7 +264,7 @@ m2a <- glmer(partyrep ~
             (1 + time | country_id) + (1 | country_id:year_fact),
            data = cses_test, family = binomial(link = "logit"))
 
-
+## Party Representation: Opp + Incumbent (spline time)
 m2a_spline <- glmer(partyrep ~
                lag_opp_pop_within_c +
                lag_opp_pop_between_c +
@@ -382,18 +282,18 @@ m2a_spline <- glmer(partyrep ~
                age_squ_c +
                lr_within_c +
                lr_between_c +
-               radical_within_c +
-               radical_between_c +
+               lr_sq_within_c +
+               lr_sq_between_c +
                as.factor(lr_missing) +
                as.factor(gender) +
                as.factor(edu) +
-              spline1 + spline2 + spline3 +  # fixed effect for spline
-              (spline1 + spline2 + spline3 | country_id) +  # random slopes for country
+              spline1 + spline2 + spline3 +
+              (spline1 + spline2 + spline3 | country_id) +
               (1 | country_id:year_fact),
              data = cses_test, family = binomial(link = "logit"))
 
-
-m2b <- lmer(feel_max ~
+## Party Favorability: Opp + Incumbent (linear time)
+m2b <- lmer(party_fav ~
                lag_opp_pop_within_c +
                lag_opp_pop_between_c +
                lag_ipop_within_c +
@@ -410,8 +310,8 @@ m2b <- lmer(feel_max ~
                age_squ_c +
                lr_within_c +
                lr_between_c +
-               radical_within_c +
-               radical_between_c +
+               lr_sq_within_c +
+               lr_sq_between_c +
                as.factor(lr_missing) +
                as.factor(gender) +
                as.factor(edu) +
@@ -419,8 +319,8 @@ m2b <- lmer(feel_max ~
               (1 + time | country_id) + (1 | country_id:year_fact),
              data = cses_test)
 
-m2b_spline <- lmer(
-  feel_max ~
+## Party Favorability: Opp + Incumbent (spline time)
+m2b_spline <- lmer(party_fav ~
     lag_opp_pop_within_c +
     lag_opp_pop_between_c +
     lag_ipop_within_c +
@@ -437,52 +337,36 @@ m2b_spline <- lmer(
     age_squ_c +
     lr_within_c +
     lr_between_c +
-    radical_within_c +
-    radical_between_c +
+    lr_sq_within_c +
+    lr_sq_between_c +
     as.factor(lr_missing) +
     as.factor(gender) +
     as.factor(edu) +
-    spline1 + spline2 + spline3 +  # fixed effect for spline
-    (spline1 + spline2 + spline3 | country_id) +  # random slopes for country
-    (1 | country_id:year_fact),  # random intercept for country-election
+    spline1 + spline2 + spline3 +
+    (spline1 + spline2 + spline3 | country_id) +
+    (1 | country_id:year_fact),
   data = cses_test
 )
 
-summary(m2)
-summary(m2_spline)
 summary(m2a)
 summary(m2a_spline)
 summary(m2b)
 summary(m2b_spline)
 
 mlist <- list(
-  "Time Ordered Logit" = m2,
-  "Spline Ordered Logit" = m2_spline,
+  "Time Logit" = m2a,
+  "Spline Logit" = m2a_spline,
   "Time MEOLS" = m2b,
   "Spline MEOLS" = m2b_spline
 )
 
 modelsummary::modelsummary(mlist, output = "latex")
 
-## Partisan Strength: Opposition only
-
-m3 <- clmm(how_rep ~ 
-             opp_pop_within_c +
-             opp_pop_between_c +
-             v2elloeldm_within_c +
-             v2elloeldm_between_c +
-             numofparties_c +
-             age_squ_c +
-             as.factor(gender) +
-             as.factor(v2elparlel) +
-             as.factor(edu) +
-             (1 | country_id/year_fact),
-           data = cses_test)
-
-summary(m3)
+# =============================================================================
+# M3 SERIES: Opposition populism only
+# =============================================================================
 
 ## Party Representation: Opposition only
-
 m3a <- glmer(partyrep ~
                lag_opp_pop_within_c +
                lag_opp_pop_between_c +
@@ -498,47 +382,24 @@ m3a <- glmer(partyrep ~
                age_squ_c +
                lr_within_c +
                lr_between_c +
-               radical_within_c +
-               radical_between_c +
+               lr_sq_within_c +
+               lr_sq_between_c +
                as.factor(lr_missing) +
                as.factor(gender) +
                as.factor(edu) +
                (1 | country_id/year_fact),
-           data = cses_test, 
+           data = cses_test,
            family = binomial(link = "logit"))
 
 summary(m3a)
 
-## Partisan Strength: Incumbent Only
+# =============================================================================
+# M4 SERIES: Incumbent populism only
+# =============================================================================
 
-m4 <- clmm(how_rep ~
-             lag_gov_pop_within_c +
-             lag_gov_pop_between_c +
-             v2elloeldm_c +
-             as.factor(v2elparlel) +
-             party_sys_age_c +
-             unemploy_t0_within_c +
-             unemploy_t0_between_c +
-             gini_within_c +
-             gini_between_c +
-             numofparties_within_c +
-             numofparties_between_c +
-             age_squ_c +
-             lr_within_c +
-             lr_between_c +
-             radical_within_c +
-             radical_between_c +
-             as.factor(lr_missing) +
-             as.factor(gender) +
-             as.factor(edu) +
-             (1 | country_id/year_fact),
-           data = cses_test)
-
-summary(m4)
-
-## Party Representation: Incumbent Only
-
-m4a <- glmer(partyrep ~ lag_ipop_within_c +
+## Party Representation: Incumbent only
+m4a <- glmer(partyrep ~
+               lag_ipop_within_c +
                lag_ipop_between_c +
                v2elloeldm_c +
                as.factor(v2elparlel) +
@@ -552,8 +413,8 @@ m4a <- glmer(partyrep ~ lag_ipop_within_c +
                age_squ_c +
                lr_within_c +
                lr_between_c +
-               radical_within_c +
-               radical_between_c +
+               lr_sq_within_c +
+               lr_sq_between_c +
                as.factor(lr_missing) +
                as.factor(gender) +
                as.factor(edu) +
@@ -563,46 +424,12 @@ m4a <- glmer(partyrep ~ lag_ipop_within_c +
 
 summary(m4a)
 
-## Partisan Strength: Government only
-
-m5 <- clmm(how_rep ~ gov_pop_within_c +
-             gov_pop_between_c +
-             v2elloeldm_within_c +
-             v2elloeldm_between_c +
-             numofparties_c +
-             age_squ_c +
-             as.factor(gender) +
-             as.factor(v2elparlel) +
-             as.factor(edu) +
-             (1| country_id) +
-             (1 | country_id:year_fact),
-           data = cses_test)
-
-summary(m5)
+# =============================================================================
+# M5 SERIES: Government populism only
+# =============================================================================
 
 ## Party Representation: Government only
-
-m5a <- glmer(how_rep ~
-             gov_pop_within_c +
-             gov_pop_between_c +
-             v2elloeldm_within_c +
-             v2elloeldm_between_c +
-             numofparties_c +
-             age_squ_c +
-             as.factor(gender) +
-             as.factor(v2elparlel) +
-             as.factor(edu) +
-             (1 | country_id/year_fact),
-           data = cses_test,
-           family = binomial(link = "logit"))
-
-summary(m5a)
-
-## Partisan Strength: System populism- Split between opposition and government
-
-m6 <- clmm(how_rep ~ 
-             lag_opp_pop_within_c +
-             lag_opp_pop_between_c +
+m5a <- glmer(partyrep ~
              lag_gov_pop_within_c +
              lag_gov_pop_between_c +
              v2elloeldm_c +
@@ -617,19 +444,23 @@ m6 <- clmm(how_rep ~
              age_squ_c +
              lr_within_c +
              lr_between_c +
-             radical_within_c +
-             radical_between_c +
+             lr_sq_within_c +
+             lr_sq_between_c +
              as.factor(lr_missing) +
              as.factor(gender) +
              as.factor(edu) +
              (1 | country_id/year_fact),
-           data = cses_test)
+           data = cses_test,
+           family = binomial(link = "logit"))
 
-summary(m6)
+summary(m5a)
 
-## Party Representation: System populism- Split between opposition and government
+# =============================================================================
+# M6 SERIES: Opp + Gov split (full governing coalition, not just incumbent)
+# =============================================================================
 
-m6a <- glmer(how_rep ~ 
+## Party Representation: Opp + Gov
+m6a <- glmer(partyrep ~
                lag_opp_pop_within_c +
                lag_opp_pop_between_c +
                lag_gov_pop_within_c +
@@ -646,8 +477,8 @@ m6a <- glmer(how_rep ~
                age_squ_c +
                lr_within_c +
                lr_between_c +
-               radical_within_c +
-               radical_between_c +
+               lr_sq_within_c +
+               lr_sq_between_c +
                as.factor(lr_missing) +
                as.factor(gender) +
                as.factor(edu) +
@@ -657,41 +488,42 @@ m6a <- glmer(how_rep ~
 
 summary(m6a)
 
-#### Partisan Strength: Indy Model
+# =============================================================================
+# M7 SERIES: Individual-level party populism only (continuous)
+# =============================================================================
 
-m7 <- clmm(how_rep ~ 
+## Party Representation: Individual closest-party populism
+m7a <- glmer(partyrep ~
              newpop_closest_within_c +
              newpop_closest_between_c +
-             v2elloeldm_within_c +
-             v2elloeldm_between_c +
-             numofparties_c +
-             age_squ_c +
-             as.factor(gender) +
+             v2elloeldm_c +
              as.factor(v2elparlel) +
-             as.factor(edu) +
-             (1 | country_id/year_fact),
-           data = cses_test)
-
-summary(m7)
-
-#### Party Representation: Indy Model
-
-m7a <- glmer(partyrep ~ 
-             newpop_closest_within_c +
-             newpop_closest_between_c +
-             v2elloeldm_within_c +
-             v2elloeldm_between_c +
-             numofparties_c +
+             party_sys_age_c +
+             unemploy_t0_within_c +
+             unemploy_t0_between_c +
+             gini_within_c +
+             gini_between_c +
+             numofparties_within_c +
+             numofparties_between_c +
              age_squ_c +
+             lr_within_c +
+             lr_between_c +
+             lr_sq_within_c +
+             lr_sq_between_c +
+             as.factor(lr_missing) +
              as.factor(gender) +
-             as.factor(v2elparlel) +
              as.factor(edu) +
              (1 | country_id/year_fact),
            data = cses_test, family = binomial(link = "logit"))
 
-#### Party Representation: Indy-system mix model
+summary(m7a)
 
-m8a <- glmer(partyrep ~ 
+# =============================================================================
+# M8 SERIES: Combined individual + system populism (additive, no interaction)
+# =============================================================================
+
+## Party Representation: Individual + System (opp + incumbent)
+m8a <- glmer(partyrep ~
                newpop_closest_within_c +
                newpop_closest_between_c +
                lag_opp_pop_within_c +
@@ -710,8 +542,8 @@ m8a <- glmer(partyrep ~
                age_squ_c +
                lr_within_c +
                lr_between_c +
-               radical_within_c +
-               radical_between_c +
+               lr_sq_within_c +
+               lr_sq_between_c +
                as.factor(lr_missing) +
                as.factor(gender) +
                as.factor(edu) +
@@ -719,19 +551,207 @@ m8a <- glmer(partyrep ~
                (1 | country_id/year_fact),
              data = cses_test, family = binomial(link = "logit"))
 
-
 summary(m8a)
 
+# =============================================================================
+# M9 SERIES: CROSS-LEVEL INTERACTIONS — Opposition populism x own party populism
+# Does the effect of opposition populism on representation depend on
+# whether the respondent's own party is populist?
+# NOTE: newpop_closest is only defined for partisans — these interaction
+# estimates are conditional on having a closest party.
+# =============================================================================
 
-summary(m1)
-summary(m2)
-summary(m3)
-summary(m4)
-summary(m5)
-summary(m6)
-summary(m7)
+## Party Representation: Opp populism x own party populism (linear time)
+m9a <- glmer(partyrep ~
+               lag_opp_pop_within_c * newpop_closest_within_c +
+               newpop_closest_between_c +
+               lag_opp_pop_between_c +
+               lag_ipop_within_c +
+               lag_ipop_between_c +
+               v2elloeldm_c +
+               as.factor(v2elparlel) +
+               party_sys_age_c +
+               unemploy_t0_within_c +
+               unemploy_t0_between_c +
+               gini_within_c +
+               gini_between_c +
+               numofparties_within_c +
+               numofparties_between_c +
+               age_squ_c +
+               lr_within_c +
+               lr_between_c +
+               lr_sq_within_c +
+               lr_sq_between_c +
+               as.factor(lr_missing) +
+               as.factor(gender) +
+               as.factor(edu) +
+               time +
+              (1 + time | country_id) + (1 | country_id:year_fact),
+             data = cses_test, family = binomial(link = "logit"))
 
+summary(m9a)
 
+## Party Representation: Opp populism x own party populism (spline time)
+m9a_spline <- glmer(partyrep ~
+               lag_opp_pop_within_c * newpop_closest_within_c +
+               newpop_closest_between_c +
+               lag_opp_pop_between_c +
+               lag_ipop_within_c +
+               lag_ipop_between_c +
+               v2elloeldm_c +
+               as.factor(v2elparlel) +
+               party_sys_age_c +
+               unemploy_t0_within_c +
+               unemploy_t0_between_c +
+               gini_within_c +
+               gini_between_c +
+               numofparties_within_c +
+               numofparties_between_c +
+               age_squ_c +
+               lr_within_c +
+               lr_between_c +
+               lr_sq_within_c +
+               lr_sq_between_c +
+               as.factor(lr_missing) +
+               as.factor(gender) +
+               as.factor(edu) +
+              spline1 + spline2 + spline3 +
+              (spline1 + spline2 + spline3 | country_id) +
+              (1 | country_id:year_fact),
+             data = cses_test, family = binomial(link = "logit"))
+
+summary(m9a_spline)
+
+## Party Favorability: Opp populism x own party populism (linear time)
+m9b <- lmer(party_fav ~
+               lag_opp_pop_within_c * newpop_closest_within_c +
+               newpop_closest_between_c +
+               lag_opp_pop_between_c +
+               lag_ipop_within_c +
+               lag_ipop_between_c +
+               v2elloeldm_c +
+               as.factor(v2elparlel) +
+               party_sys_age_c +
+               unemploy_t0_within_c +
+               unemploy_t0_between_c +
+               gini_within_c +
+               gini_between_c +
+               numofparties_within_c +
+               numofparties_between_c +
+               age_squ_c +
+               lr_within_c +
+               lr_between_c +
+               lr_sq_within_c +
+               lr_sq_between_c +
+               as.factor(lr_missing) +
+               as.factor(gender) +
+               as.factor(edu) +
+              time +
+              (1 + time | country_id) + (1 | country_id:year_fact),
+             data = cses_test)
+
+summary(m9b)
+
+## Party Favorability: Opp populism x own party populism (spline time)
+m9b_spline <- lmer(party_fav ~
+               lag_opp_pop_within_c * newpop_closest_within_c +
+               newpop_closest_between_c +
+               lag_opp_pop_between_c +
+               lag_ipop_within_c +
+               lag_ipop_between_c +
+               v2elloeldm_c +
+               as.factor(v2elparlel) +
+               party_sys_age_c +
+               unemploy_t0_within_c +
+               unemploy_t0_between_c +
+               gini_within_c +
+               gini_between_c +
+               numofparties_within_c +
+               numofparties_between_c +
+               age_squ_c +
+               lr_within_c +
+               lr_between_c +
+               lr_sq_within_c +
+               lr_sq_between_c +
+               as.factor(lr_missing) +
+               as.factor(gender) +
+               as.factor(edu) +
+              spline1 + spline2 + spline3 +
+              (spline1 + spline2 + spline3 | country_id) +
+              (1 | country_id:year_fact),
+             data = cses_test)
+
+summary(m9b_spline)
+
+# =============================================================================
+# M10 SERIES: CROSS-LEVEL INTERACTIONS — Incumbent populism x own party populism
+# =============================================================================
+
+## Party Representation: Incumbent populism x own party populism (linear time)
+m10a <- glmer(partyrep ~
+               lag_ipop_within_c * newpop_closest_within_c +
+               newpop_closest_between_c +
+               lag_ipop_between_c +
+               lag_opp_pop_within_c +
+               lag_opp_pop_between_c +
+               v2elloeldm_c +
+               as.factor(v2elparlel) +
+               party_sys_age_c +
+               unemploy_t0_within_c +
+               unemploy_t0_between_c +
+               gini_within_c +
+               gini_between_c +
+               numofparties_within_c +
+               numofparties_between_c +
+               age_squ_c +
+               lr_within_c +
+               lr_between_c +
+               lr_sq_within_c +
+               lr_sq_between_c +
+               as.factor(lr_missing) +
+               as.factor(gender) +
+               as.factor(edu) +
+               time +
+              (1 + time | country_id) + (1 | country_id:year_fact),
+             data = cses_test, family = binomial(link = "logit"))
+
+summary(m10a)
+
+## Party Favorability: Incumbent populism x own party populism (linear time)
+m10b <- lmer(party_fav ~
+               lag_ipop_within_c * newpop_closest_within_c +
+               newpop_closest_between_c +
+               lag_ipop_between_c +
+               lag_opp_pop_within_c +
+               lag_opp_pop_between_c +
+               v2elloeldm_c +
+               as.factor(v2elparlel) +
+               party_sys_age_c +
+               unemploy_t0_within_c +
+               unemploy_t0_between_c +
+               gini_within_c +
+               gini_between_c +
+               numofparties_within_c +
+               numofparties_between_c +
+               age_squ_c +
+               lr_within_c +
+               lr_between_c +
+               lr_sq_within_c +
+               lr_sq_between_c +
+               as.factor(lr_missing) +
+               as.factor(gender) +
+               as.factor(edu) +
+              time +
+              (1 + time | country_id) + (1 | country_id:year_fact),
+             data = cses_test)
+
+summary(m10b)
+
+# =============================================================================
+# MODEL SUMMARIES
+# =============================================================================
+
+# Print all partyrep model summaries
 summary(m1a)
 summary(m2a)
 summary(m3a)
@@ -740,38 +760,61 @@ summary(m5a)
 summary(m6a)
 summary(m7a)
 
+# =============================================================================
+# MODEL COMPARISON: AIC, BIC, AND BAYES FACTORS
+# Only compare models within the same DV family (same likelihood)
+# =============================================================================
 
-plot_model_coefficients <- function(model, model_name) {
-  broom.mixed::tidy(model, effects = "fixed") %>%
-    filter(term != "(Intercept)") %>%
-    ggplot(aes(x = estimate, y = term)) +
-    geom_point() +
-    geom_pointrange(aes(xmin = estimate - 1.96 * std.error,
-                       xmax = estimate + 1.96 * std.error),
-                   height = 0.2) +
-    geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
-    labs(
-      title = paste("Coefficient Plot:", model_name),
-      x = "Estimate (with 95% CI)",
-      y = NULL
-    ) +
-    theme_minimal()
-}
+# Compare partyrep (binary) models
+partyrep_comparison <- compare_models(list(
+  "m1a: System"             = m1a,
+  "m2a: Opp+Inc (time)"    = m2a,
+  "m3a: Opp only"          = m3a,
+  "m4a: Inc only"          = m4a,
+  "m5a: Gov only"          = m5a,
+  "m6a: Opp+Gov"           = m6a,
+  "m7a: Individual"        = m7a,
+  "m8a: Indiv+System"      = m8a,
+  "m9a: Opp x Indiv (time)" = m9a,
+  "m10a: Inc x Indiv (time)" = m10a
+))
+print(partyrep_comparison)
+
+# Compare party_fav (continuous) models
+partyfav_comparison <- compare_models(list(
+  "m0b: Baseline"            = m0b,
+  "m1b: System"              = m1b,
+  "m2b: Opp+Inc (time)"     = m2b,
+  "m9b: Opp x Indiv (time)" = m9b,
+  "m10b: Inc x Indiv (time)" = m10b
+))
+print(partyfav_comparison)
+
+# Compare time trend specifications within partyrep
+time_comparison_partyrep <- compare_models(list(
+  "m2a: Linear time"  = m2a,
+  "m2a_spline: Spline" = m2a_spline,
+  "m9a: Linear time"  = m9a,
+  "m9a_spline: Spline" = m9a_spline
+))
+print(time_comparison_partyrep)
+
+# Compare time trend specifications within party_fav
+time_comparison_partyfav <- compare_models(list(
+  "m2b: Linear time"  = m2b,
+  "m2b_spline: Spline" = m2b_spline,
+  "m9b: Linear time"  = m9b,
+  "m9b_spline: Spline" = m9b_spline
+))
+print(time_comparison_partyfav)
+
+# =============================================================================
+# COEFFICIENT PLOTS
+# =============================================================================
 
 plot_model_coefficients(m1a, "PartyRep: System Populism")
-plot_model_coefficients(m6, "HowRep: System Populism")
-
-
-plots <- list(
-  plot_model_coefficients(model_partyrep_syspop, "PartyRep: System Populism"),
-  plot_model_coefficients(model_partyrep_govopp, "PartyRep: Gov & Opp Populism"),
-  plot_model_coefficients(model_partyrep_opposition, "PartyRep: Opposition Populism"),
-  plot_model_coefficients(model_howrep_syspop, "HowRep: System Populism"),
-  plot_model_coefficients(model_howrep_govopp, "HowRep: Gov & Opp Populism"),
-  plot_model_coefficients(model_howrep_opposition, "HowRep: Opposition Populism")
-)
-
-
-
-
-
+plot_model_coefficients(m6a, "PartyRep: Opp + Gov Populism")
+plot_model_coefficients(m9a, "PartyRep: Opp x Own Party (time)")
+plot_model_coefficients(m9b, "PartyFav: Opp x Own Party (time)")
+plot_model_coefficients(m10a, "PartyRep: Inc x Own Party (time)")
+plot_model_coefficients(m10b, "PartyFav: Inc x Own Party (time)")

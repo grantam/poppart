@@ -286,7 +286,7 @@ cses_clean <- cses %>%
     # Center LR on 5 (so 0 = moderate) and zero-fill missing values
     lr      = lr - 5,
     lr      = ifelse(lr_missing == 1, 0, lr),
-    radical = abs(lr)
+    lr_sq = lr^2
   ) %>%
   # Recode CSES special missing codes (96-99) to NA in feeling thermometers
   mutate(across(IMD3008_A:IMD3008_I,
@@ -382,7 +382,18 @@ df_ind2 <- df_ind %>%
 cses_merged <- cses_clean3 %>%
   left_join(df_ind1, by = c("year", "closest_party", "country_id")) %>%
   left_join(df_ind2, by = c("year", "voted_party", "country_id")) %>%
-  mutate(newpop_closest_missing = ifelse(is.na(newpop_closest), 1, 0))
+  mutate(
+    newpop_closest_missing = ifelse(is.na(newpop_closest), 1, 0),
+    # Trichotomous partisan type: non-partisan, non-populist partisan, populist partisan
+    # Uses median split of newpop_closest among partisans to define "populist party"
+    partisan_type = case_when(
+      is.na(newpop_closest) ~ "no_party",
+      newpop_closest >= median(newpop_closest, na.rm = TRUE) ~ "pop_partisan",
+      TRUE ~ "nonpop_partisan"
+    ),
+    partisan_type = factor(partisan_type,
+                           levels = c("nonpop_partisan", "pop_partisan", "no_party"))
+  )
 
 # =============================================================================
 # PART 7: DEMEANING AND STANDARDIZATION
@@ -406,7 +417,7 @@ cses_demeaned <- demean(cses_merged,
 # for individual-level variables (removes election-specific means)
 cses_demeaned <- demean(cses_demeaned,
   select = c("age", "age_squ", "newpop_voted", "newpop_closest",
-             "ses", "lr", "radical"),
+             "ses", "lr", "lr_sq"),
   by = "countryear"
 )
 
@@ -436,8 +447,7 @@ vars_to_standardize <- c(
   "numofparties_within", "numofparties_between",
   "gini_between", "gini_within",
   "unemploy_t0_between", "unemploy_t0_within",
-  "lr_within", "lr_between",
-  "radical_within", "radical_between"
+  "lr_sq_within", "lr_sq_between"
 )
 
 cses_test <- cses_demeaned %>%
