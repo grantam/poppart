@@ -141,13 +141,13 @@ df_ind <- expand_year_panel(n_obs = 2602678, rows_per_id = 26,
 # Keep only the columns needed for individual-level merges
 vparty3 <- vparty2 %>%
   select(v2paid, year, newpop, country_name, country_text_id,
-         v2paenname, pf_party_id, country_id)
+         v2paenname, pf_party_id, country_id, v2pagovsup)
 
 df_ind <- left_join(df_ind, vparty3, by = c("v2paid", "year"))
 
 # Forward-fill within each party so inter-election years have data
 vars_to_fill <- c("country_name", "country_text_id", "newpop",
-                   "v2paenname", "pf_party_id", "country_id")
+                   "v2paenname", "pf_party_id", "country_id", "v2pagovsup")
 
 setDT(df_ind)
 df_ind <- df_ind[order(v2paid, year)]
@@ -157,7 +157,7 @@ df_ind[, (vars_to_fill) := lapply(.SD, function(x) na.locf(x, na.rm = FALSE)),
 df_ind <- df_ind %>%
   filter(!is.na(country_name)) %>%
   select(v2paenname, v2paid, country_name, country_text_id, year,
-         newpop, pf_party_id, country_id)
+         newpop, pf_party_id, country_id, v2pagovsup)
 
 # =============================================================================
 # PART 4: INSTITUTIONAL AND MACRO CONTROLS
@@ -372,7 +372,8 @@ cses_clean3 <- cses_clean %>%
 df_ind1 <- df_ind %>%
   rename(closest_party = pf_party_id) %>%
   select(year, closest_party, country_id,
-         newpop_closest = newpop, v2paenname_closest = v2paenname)
+         newpop_closest = newpop, v2paenname_closest = v2paenname,
+         v2pagovsup_closest = v2pagovsup)
 
 df_ind2 <- df_ind %>%
   rename(voted_party = pf_party_id) %>%
@@ -393,7 +394,17 @@ cses_merged <- cses_clean3 %>%
       TRUE ~ "nonpop_partisan"
     ),
     partisan_type = factor(partisan_type,
-                           levels = c("nonpop_partisan", "pop_partisan", "no_party"))
+                           levels = c("nonpop_partisan", "pop_partisan", "no_party")),
+    # Party alignment: classifies respondent's closest party as government,
+    # opposition, or no party based on V-Party government support variable
+    # v2pagovsup: 0 = head of govt, 1 = senior coalition, 2 = junior coalition, 3 = opposition
+    party_alignment = case_when(
+      is.na(v2pagovsup_closest) ~ "no_party",
+      v2pagovsup_closest <= 2    ~ "government",
+      v2pagovsup_closest == 3    ~ "opposition"
+    ),
+    party_alignment = factor(party_alignment,
+                             levels = c("no_party", "government", "opposition"))
   )
 
 # =============================================================================

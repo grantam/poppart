@@ -17,6 +17,7 @@ library(stargazer)
 library(data.table)
 library(corrplot)
 library(splines)
+library(glmmTMB)
 
 # =============================================================================
 # UTILITY FUNCTIONS
@@ -748,6 +749,207 @@ m10b <- lmer(party_fav ~
 summary(m10b)
 
 # =============================================================================
+# M11 SERIES: Party alignment x Opposition populism
+# Does the effect of opposition populism differ by whether the respondent's
+# closest party is in government, opposition, or no party?
+# =============================================================================
+
+## Party Representation: Opposition populism x party alignment (linear time)
+m11a <- glmer(partyrep ~
+               lag_opp_pop_within_c * party_alignment +
+               lag_opp_pop_between_c +
+               lag_ipop_within_c +
+               lag_ipop_between_c +
+               v2elloeldm_c +
+               as.factor(v2elparlel) +
+               party_sys_age_c +
+               unemploy_t0_within_c +
+               unemploy_t0_between_c +
+               gini_within_c +
+               gini_between_c +
+               numofparties_within_c +
+               numofparties_between_c +
+               age_squ_c +
+               lr_within_c +
+               lr_between_c +
+               lr_sq_within_c +
+               lr_sq_between_c +
+               as.factor(lr_missing) +
+               as.factor(gender) +
+               as.factor(edu) +
+               time +
+              (1 + time | country_id) + (1 | country_id:year_fact),
+             data = cses_test, family = binomial(link = "logit"))
+
+summary(m11a)
+
+## Party Favorability: Opposition populism x party alignment (linear time)
+m11b <- lmer(party_fav ~
+               lag_opp_pop_within_c * party_alignment +
+               lag_opp_pop_between_c +
+               lag_ipop_within_c +
+               lag_ipop_between_c +
+               v2elloeldm_c +
+               as.factor(v2elparlel) +
+               party_sys_age_c +
+               unemploy_t0_within_c +
+               unemploy_t0_between_c +
+               gini_within_c +
+               gini_between_c +
+               numofparties_within_c +
+               numofparties_between_c +
+               age_squ_c +
+               lr_within_c +
+               lr_between_c +
+               lr_sq_within_c +
+               lr_sq_between_c +
+               as.factor(lr_missing) +
+               as.factor(gender) +
+               as.factor(edu) +
+               time +
+              (1 + time | country_id) + (1 | country_id:year_fact),
+             data = cses_test)
+
+summary(m11b)
+
+# =============================================================================
+# M12 SERIES: Party alignment x Incumbent populism
+# Does the effect of incumbent populism differ by whether the respondent's
+# closest party is in government, opposition, or no party?
+# =============================================================================
+
+## Party Representation: Incumbent populism x party alignment (linear time)
+m12a <- glmer(partyrep ~
+               lag_ipop_within_c * party_alignment +
+               lag_ipop_between_c +
+               lag_opp_pop_within_c +
+               lag_opp_pop_between_c +
+               v2elloeldm_c +
+               as.factor(v2elparlel) +
+               party_sys_age_c +
+               unemploy_t0_within_c +
+               unemploy_t0_between_c +
+               gini_within_c +
+               gini_between_c +
+               numofparties_within_c +
+               numofparties_between_c +
+               age_squ_c +
+               lr_within_c +
+               lr_between_c +
+               lr_sq_within_c +
+               lr_sq_between_c +
+               as.factor(lr_missing) +
+               as.factor(gender) +
+               as.factor(edu) +
+               time +
+              (1 + time | country_id) + (1 | country_id:year_fact),
+             data = cses_test, family = binomial(link = "logit"))
+
+summary(m12a)
+
+## Party Favorability: Incumbent populism x party alignment (linear time)
+m12b <- lmer(party_fav ~
+               lag_ipop_within_c * party_alignment +
+               lag_ipop_between_c +
+               lag_opp_pop_within_c +
+               lag_opp_pop_between_c +
+               v2elloeldm_c +
+               as.factor(v2elparlel) +
+               party_sys_age_c +
+               unemploy_t0_within_c +
+               unemploy_t0_between_c +
+               gini_within_c +
+               gini_between_c +
+               numofparties_within_c +
+               numofparties_between_c +
+               age_squ_c +
+               lr_within_c +
+               lr_between_c +
+               lr_sq_within_c +
+               lr_sq_between_c +
+               as.factor(lr_missing) +
+               as.factor(gender) +
+               as.factor(edu) +
+               time +
+              (1 + time | country_id) + (1 | country_id:year_fact),
+             data = cses_test)
+
+summary(m12b)
+
+# =============================================================================
+# M13 SERIES: BETA REGRESSION — Party favorability (bounded 0-10)
+# Beta regression handles ceiling effects by modeling the outcome on (0,1)
+# with a logit link, so estimates near the boundaries are naturally compressed.
+# Rescale party_fav to (0,1) with Smithson-Verkuilen squeeze to avoid exact
+# 0s and 1s, which beta regression cannot handle.
+# =============================================================================
+
+# Rescale party_fav to (0, 1) open interval
+n_beta <- sum(!is.na(cses_test$party_fav))
+cses_test$party_fav_beta <- (cses_test$party_fav / 10 * (n_beta - 1) + 0.5) / n_beta
+
+## Party Favorability (beta): Opp + Incumbent with party alignment interactions (spline time)
+m13a <- glmmTMB(party_fav_beta ~
+               lag_ipop_within_c * party_alignment +
+               lag_ipop_between_c +
+               lag_opp_pop_within_c * party_alignment +
+               lag_opp_pop_between_c +
+               v2elloeldm_c +
+               as.factor(v2elparlel) +
+               party_sys_age_c +
+               unemploy_t0_within_c +
+               unemploy_t0_between_c +
+               gini_within_c +
+               gini_between_c +
+               numofparties_within_c +
+               numofparties_between_c +
+               age_squ_c +
+               lr_within_c +
+               lr_between_c +
+               lr_sq_within_c +
+               lr_sq_between_c +
+               as.factor(lr_missing) +
+               as.factor(gender) +
+               as.factor(edu) +
+               spline1 + spline2 + spline3 +
+               (spline1 + spline2 + spline3 | country_id) +
+               (1 | country_id:year_fact),
+             data = cses_test,
+             family = beta_family(link = "logit"))
+
+summary(m13a)
+
+## Party Favorability (beta): Opp + Incumbent with party alignment interactions (linear time)
+m13b <- glmmTMB(party_fav_beta ~
+               lag_ipop_within_c * party_alignment +
+               lag_ipop_between_c +
+               lag_opp_pop_within_c * party_alignment +
+               lag_opp_pop_between_c +
+               v2elloeldm_c +
+               as.factor(v2elparlel) +
+               party_sys_age_c +
+               unemploy_t0_within_c +
+               unemploy_t0_between_c +
+               gini_within_c +
+               gini_between_c +
+               numofparties_within_c +
+               numofparties_between_c +
+               age_squ_c +
+               lr_within_c +
+               lr_between_c +
+               lr_sq_within_c +
+               lr_sq_between_c +
+               as.factor(lr_missing) +
+               as.factor(gender) +
+               as.factor(edu) +
+               time +
+               (1 + time | country_id) + (1 | country_id:year_fact),
+             data = cses_test,
+             family = beta_family(link = "logit"))
+
+summary(m13b)
+
+# =============================================================================
 # MODEL SUMMARIES
 # =============================================================================
 
@@ -776,7 +978,9 @@ partyrep_comparison <- compare_models(list(
   "m7a: Individual"        = m7a,
   "m8a: Indiv+System"      = m8a,
   "m9a: Opp x Indiv (time)" = m9a,
-  "m10a: Inc x Indiv (time)" = m10a
+  "m10a: Inc x Indiv (time)" = m10a,
+  "m11a: Opp x Alignment (time)" = m11a,
+  "m12a: Inc x Alignment (time)" = m12a
 ))
 print(partyrep_comparison)
 
@@ -786,7 +990,9 @@ partyfav_comparison <- compare_models(list(
   "m1b: System"              = m1b,
   "m2b: Opp+Inc (time)"     = m2b,
   "m9b: Opp x Indiv (time)" = m9b,
-  "m10b: Inc x Indiv (time)" = m10b
+  "m10b: Inc x Indiv (time)" = m10b,
+  "m11b: Opp x Alignment (time)" = m11b,
+  "m12b: Inc x Alignment (time)" = m12b
 ))
 print(partyfav_comparison)
 
@@ -818,3 +1024,7 @@ plot_model_coefficients(m9a, "PartyRep: Opp x Own Party (time)")
 plot_model_coefficients(m9b, "PartyFav: Opp x Own Party (time)")
 plot_model_coefficients(m10a, "PartyRep: Inc x Own Party (time)")
 plot_model_coefficients(m10b, "PartyFav: Inc x Own Party (time)")
+plot_model_coefficients(m11a, "PartyRep: Opp x Alignment (time)")
+plot_model_coefficients(m11b, "PartyFav: Opp x Alignment (time)")
+plot_model_coefficients(m12a, "PartyRep: Inc x Alignment (time)")
+plot_model_coefficients(m12b, "PartyFav: Inc x Alignment (time)")
