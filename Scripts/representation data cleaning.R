@@ -15,6 +15,7 @@ library(stargazer)
 library(ordinal)
 library(data.table)
 library(countrycode)
+library(splines)
 
 # =============================================================================
 # HELPER: Create an expanded year panel from an ID variable
