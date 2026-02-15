@@ -950,6 +950,74 @@ m13b <- glmmTMB(party_fav_beta ~
 summary(m13b)
 
 # =============================================================================
+# PLACEBO: Unemployment x party alignment
+# The rally effect should be specific to populism, not a generic response to
+# any time-varying country condition. We estimate two models:
+#   m14a — non-interactive: party alignment enters additively alongside
+#          populism (no interactions), establishing the average effect
+#   m14b — placebo: unemployment replaces incumbent populism as the
+#          interacted variable, while populism interactions are retained
+#          in the same model as a horse race
+# =============================================================================
+
+## Non-interactive: Party alignment + populism (no interactions, linear time)
+m14a <- lmer(party_fav ~
+               lag_ipop_within_c + lag_ipop_between_c +
+               lag_opp_pop_within_c + lag_opp_pop_between_c +
+               party_alignment +
+               v2elloeldm_c +
+               as.factor(v2elparlel) +
+               party_sys_age_c +
+               unemploy_t0_within_c +
+               unemploy_t0_between_c +
+               gini_within_c +
+               gini_between_c +
+               numofparties_within_c +
+               numofparties_between_c +
+               age_squ_c +
+               lr_within_c +
+               lr_between_c +
+               lr_sq_within_c +
+               lr_sq_between_c +
+               as.factor(lr_missing) +
+               as.factor(gender) +
+               as.factor(edu) +
+               time +
+              (1 + time | country_id) + (1 | country_id:year_fact),
+             data = cses_test)
+
+summary(m14a)
+
+## Placebo: Unemployment x party alignment (populism interactions retained)
+m14b <- lmer(party_fav ~
+               unemploy_t0_within_c * party_alignment +
+               unemploy_t0_between_c +
+               lag_ipop_within_c * party_alignment +
+               lag_ipop_between_c +
+               lag_opp_pop_within_c * party_alignment +
+               lag_opp_pop_between_c +
+               v2elloeldm_c +
+               as.factor(v2elparlel) +
+               party_sys_age_c +
+               gini_within_c +
+               gini_between_c +
+               numofparties_within_c +
+               numofparties_between_c +
+               age_squ_c +
+               lr_within_c +
+               lr_between_c +
+               lr_sq_within_c +
+               lr_sq_between_c +
+               as.factor(lr_missing) +
+               as.factor(gender) +
+               as.factor(edu) +
+               time +
+              (1 + time | country_id) + (1 | country_id:year_fact),
+             data = cses_test)
+
+summary(m14b)
+
+# =============================================================================
 # MODEL SUMMARIES
 # =============================================================================
 
