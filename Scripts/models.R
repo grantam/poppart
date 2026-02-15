@@ -18,6 +18,7 @@ library(data.table)
 library(corrplot)
 library(splines)
 library(glmmTMB)
+library(car)
 
 # =============================================================================
 # UTILITY FUNCTIONS
@@ -987,6 +988,9 @@ m14a <- lmer(party_fav ~
              data = cses_test)
 
 summary(m14a)
+
+linearHypothesis(m14a,
+                 "party_alignmentgovernment = party_alignmentopposition")
 
 ## Placebo: Unemployment x party alignment (populism interactions retained)
 m14b <- lmer(party_fav ~
