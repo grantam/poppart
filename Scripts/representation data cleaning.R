@@ -134,20 +134,35 @@ df <- df %>%
 # respondents via their party IDs
 # =============================================================================
 
+# PartyFacts founding years — used to compute party age at each election
+party_age_data <- read_csv("Data/party_age.csv") %>%
+  select(pf_party_id = partyfacts_id, year_founded) %>%
+  mutate(year_founded = as.integer(year_founded))
+
 # 100,103 parties x 26 years = 2,602,678 rows
 df_ind <- expand_year_panel(n_obs = 2602678, rows_per_id = 26,
                             id_name = "v2paid", start_year = 1996)
 
 # Keep only the columns needed for individual-level merges
+# v2pagovsup_lag: government-support status from the PREVIOUS election for each party
+# party_age: years since founding as of the election year (year - year_founded)
 vparty3 <- vparty2 %>%
+  arrange(v2paid, year) %>%
+  group_by(v2paid) %>%
+  mutate(v2pagovsup_lag = lag(v2pagovsup)) %>%
+  ungroup() %>%
   select(v2paid, year, newpop, country_name, country_text_id,
-         v2paenname, pf_party_id, country_id, v2pagovsup)
+         v2paenname, pf_party_id, country_id, v2pagovsup, v2pagovsup_lag) %>%
+  left_join(party_age_data, by = "pf_party_id") %>%
+  mutate(party_age = year - year_founded) %>%
+  select(-year_founded)
 
 df_ind <- left_join(df_ind, vparty3, by = c("v2paid", "year"))
 
 # Forward-fill within each party so inter-election years have data
 vars_to_fill <- c("country_name", "country_text_id", "newpop",
-                   "v2paenname", "pf_party_id", "country_id", "v2pagovsup")
+                   "v2paenname", "pf_party_id", "country_id", "v2pagovsup", "v2pagovsup_lag",
+                   "party_age")
 
 setDT(df_ind)
 df_ind <- df_ind[order(v2paid, year)]
@@ -157,7 +172,7 @@ df_ind[, (vars_to_fill) := lapply(.SD, function(x) na.locf(x, na.rm = FALSE)),
 df_ind <- df_ind %>%
   filter(!is.na(country_name)) %>%
   select(v2paenname, v2paid, country_name, country_text_id, year,
-         newpop, pf_party_id, country_id, v2pagovsup)
+         newpop, pf_party_id, country_id, v2pagovsup, v2pagovsup_lag, party_age)
 
 # =============================================================================
 # PART 4: INSTITUTIONAL AND MACRO CONTROLS
@@ -373,7 +388,9 @@ df_ind1 <- df_ind %>%
   rename(closest_party = pf_party_id) %>%
   select(year, closest_party, country_id,
          newpop_closest = newpop, v2paenname_closest = v2paenname,
-         v2pagovsup_closest = v2pagovsup)
+         v2pagovsup_closest = v2pagovsup,
+         v2pagovsup_closest_lag = v2pagovsup_lag,
+         party_age_closest = party_age)
 
 df_ind2 <- df_ind %>%
   rename(voted_party = pf_party_id) %>%
@@ -404,7 +421,15 @@ cses_merged <- cses_clean3 %>%
       v2pagovsup_closest == 3    ~ "opposition"
     ),
     party_alignment = factor(party_alignment,
-                             levels = c("no_party", "government", "opposition"))
+                             levels = c("no_party", "government", "opposition")),
+    # Lagged alignment: role of respondent's closest party in the PREVIOUS election
+    party_alignment_lag = case_when(
+      is.na(v2pagovsup_closest_lag) ~ "no_party",
+      v2pagovsup_closest_lag <= 2   ~ "government",
+      v2pagovsup_closest_lag == 3   ~ "opposition"
+    ),
+    party_alignment_lag = factor(party_alignment_lag,
+                                 levels = c("no_party", "government", "opposition"))
   )
 
 # =============================================================================
@@ -429,7 +454,7 @@ cses_demeaned <- demean(cses_merged,
 # for individual-level variables (removes election-specific means)
 cses_demeaned <- demean(cses_demeaned,
   select = c("age", "age_squ", "newpop_voted", "newpop_closest",
-             "ses", "lr", "lr_sq"),
+             "ses", "lr", "lr_sq", "party_age_closest"),
   by = "countryear"
 )
 
@@ -459,7 +484,8 @@ vars_to_standardize <- c(
   "numofparties_within", "numofparties_between",
   "gini_between", "gini_within",
   "unemploy_t0_between", "unemploy_t0_within",
-  "lr_sq_within", "lr_sq_between"
+  "lr_sq_within", "lr_sq_between",
+  "party_age_closest_within", "party_age_closest_between"
 )
 
 cses_test <- cses_demeaned %>%
