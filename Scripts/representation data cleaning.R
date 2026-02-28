@@ -103,6 +103,14 @@ party_final <- party %>%
 # merge in the party data, and forward-fill missing years
 # =============================================================================
 
+# Parliamentary election indicator using V-Dem v2eltype_0 (= 1 when a lower house
+# election occurred). V-Dem has fuller historical coverage than V-Party.
+# Joined AFTER locf so non-election years are not forward-filled as 1.
+parl_election_years <- vdem %>%
+  filter(v2eltype_0 == 1) %>%
+  distinct(country_id, year) %>%
+  mutate(parl_election = 1L)
+
 # 236 countries x 100 years = 23,600 rows
 df <- expand_year_panel(n_obs = 23600, rows_per_id = 100,
                         id_name = "country_id", start_year = 1924)
@@ -121,12 +129,15 @@ df <- df[order(country_id, year)]
 df[, (vars_to_fill) := lapply(.SD, function(x) na.locf(x, na.rm = FALSE)),
    by = country_id, .SDcols = vars_to_fill]
 
-# Drop rows with no country info (countries that never appear in the data)
+# Drop rows with no country info (countries that never appear in the data),
+# then join the election indicator (NA → 0 for non-election years)
 df <- df %>%
   filter(!is.na(country_name)) %>%
+  left_join(parl_election_years, by = c("country_id", "year")) %>%
+  mutate(parl_election = replace_na(parl_election, 0L)) %>%
   select(country_id, country_name, country_text_id, year, sys_pop, v2paenname,
          ipop, opp_pop, gov_pop, v2pariglef,
-         lag_sys_pop, lag_ipop, lag_gov_pop, lag_opp_pop)
+         lag_sys_pop, lag_ipop, lag_gov_pop, lag_opp_pop, parl_election)
 
 # =============================================================================
 # PART 3: EXPAND INDIVIDUAL PARTY DATA TO A YEARLY PANEL
@@ -146,6 +157,30 @@ df_ind <- expand_year_panel(n_obs = 2602678, rows_per_id = 26,
 # Keep only the columns needed for individual-level merges
 # v2pagovsup_lag: government-support status from the PREVIOUS election for each party
 # party_age: years since founding as of the election year (year - year_founded)
+# new_party: 1 in the first parliamentary election year (per V-Dem v2eltype_0)
+#   that occurred in the party's country on or after year_founded.
+#   Using V-Dem rather than V-Party min(year) gives full historical coverage,
+#   preventing old parties from being miscoded as new when V-Party coverage starts.
+#   V-Dem columns are dropped immediately after the lookup — only new_party is kept.
+
+# Step 1: all lower-house election years per country from V-Dem
+vdem_parl_elections <- vdem %>%
+  filter(v2eltype_0 == 1) %>%
+  select(country_id, year)
+
+# Step 2: for each party, find the earliest V-Dem election >= year_founded
+first_election <- vparty2 %>%
+  select(v2paid, country_id, pf_party_id) %>%
+  distinct() %>%
+  left_join(party_age_data, by = "pf_party_id") %>%
+  left_join(vdem_parl_elections, by = "country_id") %>%
+  filter(!is.na(year_founded), year >= year_founded) %>%
+  group_by(v2paid) %>%
+  summarise(first_election_year = min(year, na.rm = TRUE), .groups = "drop")
+
+# Clean up — vdem_parl_elections is only needed for the lookup above
+rm(vdem_parl_elections)
+
 vparty3 <- vparty2 %>%
   arrange(v2paid, year) %>%
   group_by(v2paid) %>%
@@ -154,15 +189,27 @@ vparty3 <- vparty2 %>%
   select(v2paid, year, newpop, country_name, country_text_id,
          v2paenname, pf_party_id, country_id, v2pagovsup, v2pagovsup_lag) %>%
   left_join(party_age_data, by = "pf_party_id") %>%
-  mutate(party_age = year - year_founded) %>%
-  select(-year_founded)
+  left_join(first_election, by = "v2paid") %>%
+  mutate(
+    party_age = year - year_founded,
+    # new_party = 1 only in the first post-founding election; NA if year_founded missing
+    new_party = case_when(
+      is.na(year_founded)        ~ NA_integer_,
+      year == first_election_year ~ 1L,
+      TRUE                       ~ 0L
+    )
+  ) %>%
+  select(-first_election_year)
 
 df_ind <- left_join(df_ind, vparty3, by = c("v2paid", "year"))
 
-# Forward-fill within each party so inter-election years have data
+# Forward-fill within each party so inter-election years have data.
+# new_party is intentionally excluded: it should only be 1 in the specific first
+# election year. Forward-filling would incorrectly label the party as new forever.
+# Inter-election NAs are harmless since the CSES merge only touches election years.
 vars_to_fill <- c("country_name", "country_text_id", "newpop",
                    "v2paenname", "pf_party_id", "country_id", "v2pagovsup", "v2pagovsup_lag",
-                   "party_age")
+                   "party_age", "year_founded")
 
 setDT(df_ind)
 df_ind <- df_ind[order(v2paid, year)]
@@ -171,8 +218,10 @@ df_ind[, (vars_to_fill) := lapply(.SD, function(x) na.locf(x, na.rm = FALSE)),
 
 df_ind <- df_ind %>%
   filter(!is.na(country_name)) %>%
+  mutate(new_party = replace_na(new_party, 0L)) %>%
   select(v2paenname, v2paid, country_name, country_text_id, year,
-         newpop, pf_party_id, country_id, v2pagovsup, v2pagovsup_lag, party_age)
+         newpop, pf_party_id, country_id, v2pagovsup, v2pagovsup_lag,
+         party_age, new_party, year_founded)
 
 # =============================================================================
 # PART 4: INSTITUTIONAL AND MACRO CONTROLS
@@ -390,7 +439,9 @@ df_ind1 <- df_ind %>%
          newpop_closest = newpop, v2paenname_closest = v2paenname,
          v2pagovsup_closest = v2pagovsup,
          v2pagovsup_closest_lag = v2pagovsup_lag,
-         party_age_closest = party_age)
+         party_age_closest = party_age,
+         new_party_closest = new_party,
+         year_founded_closest = year_founded)
 
 df_ind2 <- df_ind %>%
   rename(voted_party = pf_party_id) %>%

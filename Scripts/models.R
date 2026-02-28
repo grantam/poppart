@@ -19,6 +19,7 @@ library(corrplot)
 library(splines)
 library(glmmTMB)
 library(car)
+library(modelsummary)
 
 # =============================================================================
 # UTILITY FUNCTIONS
@@ -165,7 +166,7 @@ print(missing_df)
 m0a <- glmer(partyrep ~
                sys_pop_within_c +
                sys_pop_between_c +
-               (1 | country_id/year_fact),
+               (1 | country_id/ye ar_fact),
              data = cses_test, family = binomial(link = "logit"))
 
 summary(m0a)
@@ -850,8 +851,8 @@ summary(m12a)
 
 ## Party Favorability: Incumbent populism x party alignment (linear time)
 m12b <- lmer(party_fav ~
-               lag_ipop_within_c * party_alignment_lag +
-               lag_ipop_between_c +
+               lag_gov_pop_within_c * party_alignment_lag +
+               lag_gov_pop_between_c +
                lag_opp_pop_within_c * party_alignment_lag +
                lag_opp_pop_between_c +
                v2elloeldm_c +
@@ -876,6 +877,8 @@ m12b <- lmer(party_fav ~
              data = cses_test)
 
 summary(m12b)
+
+modelsummary(m12b, stars = T)
 
 # =============================================================================
 # M13 SERIES: BETA REGRESSION — Party favorability (bounded 0-10)
@@ -1021,6 +1024,34 @@ m14b <- lmer(party_fav ~
 
 summary(m14b)
 
+m15b <- lmer(party_fav ~
+               unemploy_t0_within_c * party_alignment +
+               unemploy_t0_between_c +
+               lag_ipop_within_c * party_alignment +
+               lag_ipop_between_c +
+               lag_opp_pop_within_c * party_alignment +
+               lag_opp_pop_between_c +
+               v2elloeldm_c +
+               as.factor(v2elparlel) +
+               party_sys_age_c +
+               gini_within_c +
+               gini_between_c +
+               numofparties_within_c +
+               numofparties_between_c +
+               age_squ_c +
+               lr_within_c +
+               lr_between_c +
+               lr_sq_within_c +
+               lr_sq_between_c +
+               as.factor(lr_missing) +
+               as.factor(gender) +
+               as.factor(edu) +
+               time +
+               (1 + time | country_id) + (1 | country_id:year_fact),
+             data = cses_test)
+
+summary(m15b)
+
 # =============================================================================
 # MODEL SUMMARIES
 # =============================================================================
@@ -1110,8 +1141,8 @@ plot_model_coefficients(m12b, "PartyFav: Inc x Alignment (time)")
 
 
 
-broom.mixed::tidy(m13b, effects = "fixed") %>%
-  filter(str_detect(term, "ipop|opp_pop|alignment")) %>%
+broom.mixed::tidy(m12b, effects = "fixed") %>%
+  filter(str_detect(term, "gov_pop|opp_pop|alignment")) %>%
   mutate(term = fct_inorder(term)) %>%
   ggplot(aes(x = estimate, y = term)) +
   geom_point(size = 2) +
@@ -1130,25 +1161,25 @@ broom.mixed::tidy(m13b, effects = "fixed") %>%
 library(broom.mixed)
 
 # Extract coefficients and variance-covariance matrix
-coefs <- fixef(m13b)$cond
-vcov_mat <- vcov(m13b)$cond
+coefs <- fixef(m12b)$cond
+vcov_mat <- vcov(m12b)$cond
 
 # --- Incumbent populism effect by alignment ---
-ipop_effects <- tibble(
+gov_pop_effects <- tibble(
   group = c("No Party", "Government", "Opposition"),
   estimate = c(
-    coefs["lag_ipop_within_c"],
-    coefs["lag_ipop_within_c"] + coefs["lag_ipop_within_c:party_alignment_laggovernment"],
-    coefs["lag_ipop_within_c"] + coefs["lag_ipop_within_c:party_alignment_lagopposition"]
+    coefs["lag_gov_pop_within_c"],
+    coefs["lag_gov_pop_within_c"] + coefs["lag_gov_pop_within_c:party_alignment_laggovernment"],
+    coefs["lag_gov_pop_within_c"] + coefs["lag_gov_pop_within_c:party_alignment_lagopposition"]
   ),
   se = c(
-    sqrt(vcov_mat["lag_ipop_within_c", "lag_ipop_within_c"]),
-    sqrt(vcov_mat["lag_ipop_within_c", "lag_ipop_within_c"] +
-           vcov_mat["lag_ipop_within_c:party_alignment_laggovernment", "lag_ipop_within_c:party_alignment_laggovernment"] +
-           2 * vcov_mat["lag_ipop_within_c", "lag_ipop_within_c:party_alignment_laggovernment"]),
-    sqrt(vcov_mat["lag_ipop_within_c", "lag_ipop_within_c"] +
-           vcov_mat["lag_ipop_within_c:party_alignment_lagopposition", "lag_ipop_within_c:party_alignment_lagopposition"] +
-           2 * vcov_mat["lag_ipop_within_c", "lag_ipop_within_c:party_alignment_lagopposition"])
+    sqrt(vcov_mat["lag_gov_pop_within_c", "lag_gov_pop_within_c"]),
+    sqrt(vcov_mat["lag_gov_pop_within_c", "lag_gov_pop_within_c"] +
+           vcov_mat["lag_gov_pop_within_c:party_alignment_laggovernment", "lag_gov_pop_within_c:party_alignment_laggovernment"] +
+           2 * vcov_mat["lag_gov_pop_within_c", "lag_gov_pop_within_c:party_alignment_laggovernment"]),
+    sqrt(vcov_mat["lag_gov_pop_within_c", "lag_gov_pop_within_c"] +
+           vcov_mat["lag_gov_pop_within_c:party_alignment_lagopposition", "lag_gov_pop_within_c:party_alignment_lagopposition"] +
+           2 * vcov_mat["lag_gov_pop_within_c", "lag_gov_pop_within_c:party_alignment_lagopposition"])
   ),
   predictor = "Incumbent Populism"
 )
